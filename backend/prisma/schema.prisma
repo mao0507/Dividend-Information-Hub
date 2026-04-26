@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  settings        UserSettings?
+  watchlistGroups WatchlistGroup[]
+  holdings        Holding[]
+  alertRules      AlertRule[]
+  notifications   Notification[]
+}
+
+model UserSettings {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  accent   String  @default("#22c55e")
+  upRed    Boolean @default(true)
+  density  String  @default("cozy")
+  monoFont String  @default("JetBrains Mono")
+  sansFont String  @default("Inter")
+  radius   Int     @default(10)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Stock {
+  code      String   @id
+  name      String
+  nameAlias String?
+  sector    String
+  market    String   @default("TWSE")
+  isEtf     Boolean  @default(false)
+  pe        Float?
+  marketCap BigInt?
+  updatedAt DateTime @updatedAt
+
+  dividends      Dividend[]
+  prices         StockPrice[]
+  watchlistItems WatchlistItem[]
+  holdings       Holding[]
+}
+
+model Dividend {
+  id          String    @id @default(cuid())
+  stockCode   String
+  year        Int
+  period      Int       @default(1)
+  freq        String
+  cash        Float
+  stockDiv    Float     @default(0)
+  exDate      DateTime?
+  payDate     DateTime?
+  announcedAt DateTime?
+  fillDays    Int?
+  filled      Boolean   @default(false)
+
+  stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@unique([stockCode, year, period])
+}
+
+model StockPrice {
+  id        String   @id @default(cuid())
+  stockCode String
+  date      DateTime @db.Date
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    BigInt
+
+  stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@unique([stockCode, date])
+  @@index([stockCode, date])
+}
+
+model WatchlistGroup {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+  color  String @default("#22c55e")
+  order  Int    @default(0)
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WatchlistItem[]
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  groupId   String
+  stockCode String
+  order     Int      @default(0)
+  addedAt   DateTime @default(now())
+
+  group WatchlistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  stock Stock          @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@unique([groupId, stockCode])
+  @@index([groupId])
+}
+
+model Holding {
+  id        String   @id @default(cuid())
+  userId    String
+  stockCode String
+  shares    Int
+  avgCost   Float
+  boughtAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AlertRule {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  type      String
+  isOn      Boolean  @default(true)
+  matchType String   @default("watchlist")
+  stockCode String?
+  channels  String[]
+  threshold Float?
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  alertRuleId String?
+  type        String
+  stockCode   String?
+  title       String
+  body        String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertRule AlertRule? @relation(fields: [alertRuleId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}

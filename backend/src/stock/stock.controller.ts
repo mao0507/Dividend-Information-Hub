@@ -25,7 +25,6 @@ export class StockController {
       yieldGt: yieldGt ? parseFloat(yieldGt) : undefined,
       freq,
       sector,
-      streakGte: streakGte ? parseInt(streakGte) : undefined,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 50,
     })
@@ -49,5 +48,10 @@ export class StockController {
   @Get(':code/peers')
   getPeers(@Param('code') code: string) {
     return this.stock.getPeers(code)
+  }
+
+  @Get(':code/fill-progress')
+  getFillProgress(@Param('code') code: string) {
+    return this.stock.getFillProgress(code)
   }
 }

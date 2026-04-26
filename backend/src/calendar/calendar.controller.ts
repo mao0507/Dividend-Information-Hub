@@ -12,6 +12,9 @@ export class CalendarController {
   getMonth(
     @Query('year') year: string,
     @Query('month') month: string,
+    @Query('watchlistOnly') watchlistOnly: string,
+    @Query('freq') freq: string,
+    @Query('yieldGt') yieldGt: string,
     @Req() req: Request,
   ) {
     const user = req.user as { id: string }
@@ -19,6 +22,11 @@ export class CalendarController {
       parseInt(year) || new Date().getFullYear(),
       parseInt(month) || new Date().getMonth() + 1,
       user.id,
+      {
+        watchlistOnly: watchlistOnly === 'true',
+        freq: freq || undefined,
+        yieldGt: yieldGt ? parseFloat(yieldGt) : undefined,
+      },
     )
   }
 

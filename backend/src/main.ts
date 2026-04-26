@@ -3,6 +3,11 @@ import { ValidationPipe } from '@nestjs/common'
 import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module'
 
+// BigInt 無法被 JSON.stringify 序列化，轉為 Number 輸出
+;(BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
+  return Number(this)
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
 

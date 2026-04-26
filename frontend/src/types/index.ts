@@ -82,7 +82,10 @@ export interface Notification {
 }
 
 export interface CalendarEvent {
-  date: string
+  id?: string
+  date?: string
+  exDate?: string | null
+  payDate?: string | null
   stockCode: string
   stockName: string
   amount: number

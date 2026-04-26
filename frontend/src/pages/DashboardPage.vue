@@ -94,8 +94,8 @@
                 @click="router.push(`/stock/${ev.stockCode}`)"
               >
                 <div class="text-center min-w-[36px]">
-                  <div class="font-mono text-[10px] text-content-faint">{{ fmtMonth(ev.date) }}</div>
-                  <div class="font-mono text-base font-semibold text-content leading-none">{{ fmtDay(ev.date) }}</div>
+                  <div class="font-mono text-[10px] text-content-faint">{{ fmtMonth(ev.date ?? ev.exDate ?? '') }}</div>
+                  <div class="font-mono text-base font-semibold text-content leading-none">{{ fmtDay(ev.date ?? ev.exDate ?? '') }}</div>
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-[12px] font-medium text-content truncate">{{ ev.stockName }}</div>

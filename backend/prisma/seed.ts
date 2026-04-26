@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
@@ -158,6 +159,16 @@ const PRICES_MAP: Record<string, number> = {
 async function main() {
   console.log('🌱 Seeding database...')
 
+  // Stocks must be created BEFORE user (watchlist items have FK to stock)
+  for (const stock of STOCKS) {
+    await prisma.stock.upsert({
+      where: { code: stock.code },
+      update: stock,
+      create: { ...stock, market: 'TWSE' },
+    })
+  }
+  console.log(`✅ Stocks: ${STOCKS.length} 檔`)
+
   // Test user
   const passwordHash = await bcrypt.hash('password123', 12)
   const user = await prisma.user.upsert({
@@ -210,16 +221,6 @@ async function main() {
     },
   })
   console.log(`✅ User: ${user.email}`)
-
-  // Stocks
-  for (const stock of STOCKS) {
-    await prisma.stock.upsert({
-      where: { code: stock.code },
-      update: stock,
-      create: { ...stock, market: 'TWSE' },
-    })
-  }
-  console.log(`✅ Stocks: ${STOCKS.length} 檔`)
 
   // Dividends
   let divCount = 0

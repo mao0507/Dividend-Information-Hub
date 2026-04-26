@@ -1,7 +1,10 @@
 node_modules
-openspec
 
-CLAUDE.md 
+openspec
+openspec/
+
+
+CLAUDE.md
 .claude
 .cursor
 .env

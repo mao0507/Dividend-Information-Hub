@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 
 @Injectable()
@@ -17,7 +17,12 @@ export class WatchlistService {
               include: {
                 dividends: {
                   orderBy: [{ year: 'desc' }, { period: 'desc' }],
-                  take: 1,
+                  take: 4,
+                },
+                prices: {
+                  orderBy: { date: 'desc' },
+                  take: 24,
+                  select: { date: true, close: true },
                 },
               },
             },
@@ -40,7 +45,14 @@ export class WatchlistService {
   }
 
   async deleteGroup(id: string, userId: string) {
-    await this.prisma.watchlistGroup.findFirstOrThrow({ where: { id, userId } })
+    const group = await this.prisma.watchlistGroup.findFirst({
+      where: { id, userId },
+      include: { _count: { select: { items: true } } },
+    })
+    if (!group) throw new NotFoundException()
+    if (group._count.items > 0) {
+      throw new BadRequestException('分組內仍有股票，請先移出後再刪除分組')
+    }
     return this.prisma.watchlistGroup.delete({ where: { id } })
   }
 
@@ -74,16 +86,72 @@ export class WatchlistService {
   }
 
   async getSummary(userId: string) {
-    const groups = await this.prisma.watchlistGroup.findMany({
-      where: { userId },
-      include: { items: { select: { stockCode: true } } },
+    const items = await this.prisma.watchlistItem.findMany({
+      where: { group: { userId } },
+      select: { stockCode: true },
     })
-    const totalStocks = groups.reduce((a, g) => a + g.items.length, 0)
+    const codes = [...new Set(items.map((i) => i.stockCode))]
+    const totalStocks = codes.length
+
+    if (totalStocks === 0) {
+      return {
+        totalStocks: 0,
+        totalValue: 0,
+        yearIncome: 0,
+        pendingExDiv: 0,
+      }
+    }
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const yearEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999)
+
+    const [holdings, prices, divsThisYear, pendingExRows] = await Promise.all([
+      this.prisma.holding.findMany({
+        where: { userId, stockCode: { in: codes } },
+        select: { stockCode: true, shares: true },
+      }),
+      this.prisma.stockPrice.findMany({
+        where: { stockCode: { in: codes } },
+        orderBy: { date: 'desc' },
+        select: { stockCode: true, close: true },
+      }),
+      this.prisma.dividend.findMany({
+        where: { stockCode: { in: codes }, year: today.getFullYear() },
+        select: { stockCode: true, cash: true },
+      }),
+      this.prisma.dividend.findMany({
+        where: {
+          stockCode: { in: codes },
+          exDate: { gte: today, lte: yearEnd },
+        },
+        select: { id: true },
+      }),
+    ])
+
+    const priceByCode = new Map<string, number>()
+    for (const p of prices) {
+      if (!priceByCode.has(p.stockCode)) priceByCode.set(p.stockCode, p.close)
+    }
+    const divSumByCode = divsThisYear.reduce<Map<string, number>>((m, d) => {
+      m.set(d.stockCode, (m.get(d.stockCode) ?? 0) + d.cash)
+      return m
+    }, new Map())
+
+    let totalValue = 0
+    let yearIncome = 0
+    for (const h of holdings) {
+      const px = priceByCode.get(h.stockCode) ?? 0
+      totalValue += px * h.shares
+      const annual = divSumByCode.get(h.stockCode) ?? 0
+      yearIncome += annual * h.shares
+    }
+
     return {
       totalStocks,
-      totalValue: 0,
-      yearIncome: 48260,
-      pendingExDiv: 5,
+      totalValue: Math.round(totalValue),
+      yearIncome: Math.round(yearIncome),
+      pendingExDiv: pendingExRows.length,
     }
   }
 }

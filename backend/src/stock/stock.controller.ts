@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common'
+import type { Request } from 'express'
 import { StockService } from './stock.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 
@@ -12,12 +13,19 @@ export class StockController {
     return this.stock.search(q ?? '', limit ? parseInt(limit) : 10)
   }
 
+  @Get('ranking/presets')
+  getRankingPresets() {
+    return this.stock.getRankingPresets()
+  }
+
   @Get('ranking')
   getRanking(
     @Query('yieldGt') yieldGt?: string,
     @Query('freq') freq?: string,
     @Query('sector') sector?: string,
     @Query('streakGte') streakGte?: string,
+    @Query('fillDaysLte') fillDaysLte?: string,
+    @Query('marketCapGte') marketCapGte?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -25,9 +33,18 @@ export class StockController {
       yieldGt: yieldGt ? parseFloat(yieldGt) : undefined,
       freq,
       sector,
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 50,
+      streakGte: streakGte ? parseInt(streakGte, 10) : undefined,
+      fillDaysLte: fillDaysLte ? parseInt(fillDaysLte, 10) : undefined,
+      marketCapGte: marketCapGte ? parseFloat(marketCapGte) : undefined,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
     })
+  }
+
+  @Get('featured')
+  getFeatured(@Req() req: Request) {
+    const user = req.user as { id: string }
+    return this.stock.getFeatured(user.id)
   }
 
   @Get(':code')

@@ -1,8 +1,40 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 
+type DividendRow = { year: number; period: number; freq: string; cash: number; exDate: Date | null; fillDays: number | null; filled: boolean }
+
 const RANGE_DAYS: Record<string, number> = {
   '1D': 1, '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365, 'MAX': 1825,
+}
+
+/**
+ * 依歷年配息推算連續配息年數（自當年起往回）
+ * @param dividends 配息紀錄
+ * @param curYear 基準年
+ * @returns 連續年數
+ */
+const countDividendStreak = (dividends: DividendRow[], curYear: number): number => {
+  const years = [...new Set(dividends.map((d) => d.year))].sort((a, b) => b - a)
+  let streak = 0
+  for (let y = curYear; y >= curYear - 40; y--) {
+    if (years.includes(y)) streak++
+    else break
+  }
+  return streak
+}
+
+/**
+ * 以除息後天數與歷史填息天數估算填息進度（0–100）
+ * @param d 最近一筆已除息之配息紀錄
+ */
+const estimateFillRateFromDividend = (d: DividendRow | undefined): number => {
+  if (!d?.exDate || d.exDate > new Date()) return 0
+  if (d.filled) return 100
+  const daysSince = Math.floor((Date.now() - d.exDate.getTime()) / 86_400_000)
+  if (d.fillDays && d.fillDays > 0) {
+    return Math.min(99, parseFloat(((daysSince / d.fillDays) * 100).toFixed(1)))
+  }
+  return Math.min(90, daysSince * 4)
 }
 
 @Injectable()
@@ -26,6 +58,31 @@ export class StockService {
       take: limit,
       select: { code: true, name: true, sector: true, isEtf: true, market: true },
     })
+
+  /**
+   * 儀表板 Hero：自選股清單中「第一筆」（依分組 order、組內項目 order）
+   * @param userId 使用者 id
+   * @returns `{ featured }`；無任何自選股時 `featured` 為 null
+   */
+  readonly getFeatured = async (userId: string) => {
+    const groups = await this.prisma.watchlistGroup.findMany({
+      where: { userId },
+      orderBy: { order: 'asc' },
+      include: {
+        items: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    })
+    for (const g of groups) {
+      const first = g.items[0]
+      if (first) {
+        const detail = await this.getDetail(first.stockCode)
+        return { featured: detail }
+      }
+    }
+    return { featured: null }
+  }
 
   /**
    * 取得個股詳細資料，含最新股價與最新配息
@@ -198,46 +255,116 @@ export class StockService {
   }
 
   /**
-   * 取得高股息排行榜
+   * 取得排行榜預設篩選組合
+   * @returns 預設組合列表
+   */
+  readonly getRankingPresets = () => [
+    { id: 'high-yield', name: '高殖利率 (>5%)', filters: { yieldGt: 5 } },
+    { id: 'monthly', name: '月配息', filters: { freq: 'monthly' } },
+    { id: 'streak10', name: '連續配息 ≥10 年', filters: { streakGte: 10 } },
+    { id: 'fast-fill', name: '填息 ≤15 日', filters: { fillDaysLte: 15 } },
+    { id: 'large-cap', name: '大型股（市值 ≥3000 億）', filters: { marketCapGte: 3_000_000_000_000 } },
+    { id: 'etf-high', name: '高息 ETF', filters: { sector: 'ETF', yieldGt: 4 } },
+  ]
+
+  /**
+   * 取得高股息排行榜（全量計算後分頁）
    * @param params 篩選條件與分頁參數
    */
   readonly getRanking = async (params: {
     yieldGt?: number
     freq?: string
     sector?: string
+    streakGte?: number
+    fillDaysLte?: number
+    marketCapGte?: number
     page?: number
     limit?: number
   }) => {
     const { page = 1, limit = 50 } = params
+    const curYear = new Date().getFullYear()
+
+    const stocks = await this.prisma.stock.findMany({
+      where: params.sector ? { sector: params.sector } : {},
+      include: {
+        dividends: {
+          where: { year: { gte: curYear - 20 } },
+          orderBy: [{ year: 'desc' }, { period: 'desc' }],
+        },
+        prices: { orderBy: { date: 'desc' }, take: 2 },
+      },
+    })
+
+    const rows = stocks.map((s) => {
+      const divs = s.dividends as DividendRow[]
+      const latestDiv = divs[0]
+      const refYear = latestDiv?.year ?? curYear
+      const annualCash = divs.filter((d) => d.year === refYear).reduce((sum, d) => sum + d.cash, 0)
+
+      const price = s.prices[0]?.close ?? 0
+      const prevClose = s.prices[1]?.close ?? price
+      const changePct = prevClose > 0 ? parseFloat((((price - prevClose) / prevClose) * 100).toFixed(2)) : 0
+      const yieldPct = price > 0 ? (annualCash / price) * 100 : 0
+
+      const streak = countDividendStreak(divs, curYear)
+      const latestPastDiv = divs.find((d) => d.exDate && d.exDate <= new Date())
+      const latestFillDays = latestPastDiv?.fillDays ?? null
+      const fillRate = estimateFillRateFromDividend(latestPastDiv ?? latestDiv)
+
+      const cap = s.marketCap !== null ? Number(s.marketCap) : 0
+
+      let badge: string | undefined
+      if (yieldPct >= 8) badge = '高息'
+      else if (streak >= 10) badge = '長配'
+      if (s.isEtf) badge = badge ? `${badge}·ETF` : 'ETF'
+
+      return {
+        code: s.code,
+        name: s.name,
+        sector: s.sector,
+        freq: latestDiv?.freq ?? '—',
+        yield: parseFloat(yieldPct.toFixed(2)),
+        cash: parseFloat(annualCash.toFixed(2)),
+        price,
+        changePct,
+        fillRate,
+        badge,
+        isEtf: s.isEtf,
+        streak,
+        latestFillDays,
+        marketCapNum: cap,
+      }
+    })
+
+    const filtered = rows
+      .filter((r) => params.yieldGt === undefined || r.yield >= params.yieldGt)
+      .filter((r) => !params.freq || r.freq === params.freq)
+      .filter((r) => params.streakGte === undefined || r.streak >= params.streakGte)
+      .filter(
+        (r) =>
+          params.fillDaysLte === undefined ||
+          (r.latestFillDays !== null && r.latestFillDays <= params.fillDaysLte),
+      )
+      .filter((r) => params.marketCapGte === undefined || r.marketCapNum >= params.marketCapGte)
+      .sort((a, b) => b.yield - a.yield)
+
+    const total = filtered.length
     const skip = (page - 1) * limit
+    const slice = filtered.slice(skip, skip + limit).map((r, i) => ({
+      rank: skip + i + 1,
+      code: r.code,
+      name: r.name,
+      sector: r.sector,
+      freq: r.freq,
+      yield: r.yield,
+      cash: r.cash,
+      price: r.price,
+      changePct: r.changePct,
+      fillRate: r.fillRate,
+      badge: r.badge,
+      isEtf: r.isEtf,
+    }))
 
-    const [data, total] = await Promise.all([
-      this.prisma.stock.findMany({
-        skip,
-        take: limit,
-        where: {
-          ...(params.sector ? { sector: params.sector } : {}),
-        },
-        include: {
-          dividends: { orderBy: [{ year: 'desc' }, { period: 'desc' }], take: 1 },
-          prices: { orderBy: { date: 'desc' }, take: 1 },
-        },
-      }),
-      this.prisma.stock.count(),
-    ])
-
-    const ranked = data
-      .map((s) => {
-        const price = s.prices[0]?.close ?? 0
-        const cash = s.dividends[0]?.cash ?? 0
-        const yieldPct = price > 0 ? (cash / price) * 100 : 0
-        return { ...s, price, cash, yieldPct }
-      })
-      .filter((s) => !params.yieldGt || s.yieldPct >= params.yieldGt)
-      .filter((s) => !params.freq || s.dividends[0]?.freq === params.freq)
-      .sort((a, b) => b.yieldPct - a.yieldPct)
-      .map((s, i) => ({ ...s, rank: skip + i + 1 }))
-
-    return { data: ranked, total }
+    return { data: slice, total }
   }
 }

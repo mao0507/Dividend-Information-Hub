@@ -5,7 +5,7 @@ import {
 import type { Request } from 'express'
 import { WatchlistService } from './watchlist.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
-import { IsString, IsOptional } from 'class-validator'
+import { IsString, IsOptional, IsArray, ArrayMinSize } from 'class-validator'
 
 class CreateGroupDto {
   @IsString() name: string
@@ -18,7 +18,10 @@ class AddItemDto {
 }
 
 class ReorderDto {
-  ids: string[]
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  ids!: string[]
 }
 
 @Controller('watchlist')

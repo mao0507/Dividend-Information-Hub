@@ -33,7 +33,15 @@ export const useTweaksStore = defineStore('tweaks', () => {
     settings.value = { ...defaults }
   }
 
+  /**
+   * 一次套用完整外觀設定。
+   * @param next 新設定
+   */
+  function setAll(next: TweakSettings) {
+    settings.value = { ...next }
+  }
+
   watch(settings, applyToDOM, { deep: true, immediate: true })
 
-  return { settings, setTweak, reset }
+  return { settings, setTweak, setAll, reset }
 })

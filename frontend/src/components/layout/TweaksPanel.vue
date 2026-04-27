@@ -3,7 +3,9 @@
     <button
       class="w-8 h-8 rounded-full bg-surface-2 border border-border-strong flex items-center justify-center text-content-soft hover:text-content transition-colors shadow-lg"
       @click="open = !open"
-    >⚙</button>
+    >
+      <ThemedIcon name="cog-6-tooth" size-class="w-4 h-4" />
+    </button>
 
     <Transition name="slide-up">
       <div v-if="open" class="absolute bottom-10 right-0 w-[280px] bg-surface-2 border border-border-strong rounded-[var(--radius)] shadow-2xl p-4 space-y-5">
@@ -74,6 +76,7 @@
 import { ref } from 'vue'
 import { useTweaksStore } from '@/stores/tweaks'
 import USlider from '@/components/ui/USlider.vue'
+import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 
 const tweaks = useTweaksStore()
 const open = ref(false)

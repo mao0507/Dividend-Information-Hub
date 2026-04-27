@@ -41,7 +41,11 @@
             ]"
             @click="navigate"
           >
-            <span :class="['font-mono w-3 text-[11px]', isActive ? 'text-accent' : 'text-content-faint']">{{ item.icon }}</span>
+            <ThemedIcon
+              :name="item.icon"
+              size-class="w-3.5 h-3.5"
+              :class="isActive ? 'text-accent' : 'text-content-faint'"
+            />
             <span class="flex-1">{{ item.label }}</span>
             <UBadge v-if="item.badge">{{ item.badge }}</UBadge>
           </div>
@@ -60,26 +64,30 @@
 
 <script setup lang="ts">
 import UBadge from '@/components/ui/UBadge.vue'
+import ThemedIcon from '@/components/icons/ThemedIcon.vue'
+import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
 
 defineEmits<{ (e: 'openSearch'): void }>()
 
-const navSections = [
+type NavItem = { to: string; icon: ThemedIconName; label: string; badge?: string }
+
+const navSections: Array<{ group: string; items: NavItem[] }> = [
   {
     group: '主選單',
     items: [
-      { to: '/dashboard', icon: '◎', label: '儀表板' },
-      { to: '/calendar', icon: '◫', label: '除息行事曆' },
-      { to: '/watchlist', icon: '★', label: '自選股', badge: '8' },
-      { to: '/ranking', icon: '▲', label: '高股息排行' },
-      { to: '/viz', icon: '⊞', label: '視覺化分析' },
+      { to: '/dashboard', icon: 'presentation-chart-line', label: '儀表板' },
+      { to: '/calendar', icon: 'calendar', label: '除息行事曆' },
+      { to: '/watchlist', icon: 'star', label: '自選股', badge: '8' },
+      { to: '/ranking', icon: 'arrow-trending-up', label: '高股息排行' },
+      { to: '/viz', icon: 'squares-2x2', label: '視覺化分析' },
     ],
   },
   {
     group: '工具',
     items: [
-      { to: '/drip', icon: 'ƒ', label: '再投入試算' },
-      { to: '/alerts', icon: '⌁', label: '提醒設定' },
-      { to: '/settings', icon: '⚙', label: '設定' },
+      { to: '/drip', icon: 'calculator', label: '再投入試算' },
+      { to: '/alerts', icon: 'bell', label: '提醒設定' },
+      { to: '/settings', icon: 'cog-6-tooth', label: '設定' },
     ],
   },
 ]

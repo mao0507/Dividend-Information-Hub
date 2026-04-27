@@ -27,11 +27,13 @@ export interface StockDetail extends Stock {
   change: number
   changePct: number
   volume: number
-  high52w: number
-  low52w: number
-  updatedAt: string
+  high52w?: number
+  low52w?: number
+  updatedAt: string | null
   latestDividend?: Dividend
   streak: number
+  annualCash?: number
+  yieldPct?: number
   avgFillDays?: number
   stabilityScore?: number
 }
@@ -49,7 +51,24 @@ export interface WatchlistItem {
   groupId: string
   stockCode: string
   order: number
-  stock: StockDetail
+  stock: Stock & {
+    dividends?: Dividend[]
+    prices?: { date: string; close: number }[]
+  }
+}
+
+/** 排行榜預設篩選組合 */
+export interface RankingPreset {
+  id: string
+  name: string
+  filters: {
+    yieldGt?: number
+    freq?: string
+    sector?: string
+    streakGte?: number
+    fillDaysLte?: number
+    marketCapGte?: number
+  }
 }
 
 export interface Holding {
@@ -106,19 +125,59 @@ export interface DashboardSummary {
 export interface DripInput {
   principal: number
   monthlyAdd: number
-  yieldPct: number
-  growthPct: number
+  yield: number
+  growth: number
   years: number
   taxRate: number
 }
 
+export interface DripYearPoint {
+  year: number
+  assetsWithReinvest: number
+  assetsWithoutReinvest: number
+  annualDividendWithReinvest: number
+  annualDividendWithoutReinvest: number
+}
+
 export interface DripResult {
-  withReinvest: number[]
-  withoutReinvest: number[]
-  targetYear?: number
-  finalAmount: number
-  finalAnnualIncome: number
-  finalMonthlyIncome: number
+  series: DripYearPoint[]
+  targetAchievementYear: number | null
+  finalYearAnnualDividend: number
+  averageMonthlyIncome: number
+}
+
+export interface VizSectorDistribution {
+  totalValue: number
+  sectors: {
+    sector: string
+    value: number
+    pct: number
+  }[]
+}
+
+export interface VizMonthlyIncome {
+  year: number
+  months: {
+    month: number
+    income: number
+  }[]
+  annualIncome: number
+}
+
+export interface VizHeatmap {
+  year: number
+  sectors: {
+    sector: string
+    values: number[]
+  }[]
+}
+
+export interface VizAnnualGrowth {
+  years: {
+    year: number
+    sectors: Record<string, number>
+    total: number
+  }[]
 }
 
 export interface TweakSettings {
@@ -128,6 +187,32 @@ export interface TweakSettings {
   monoFont: string
   sansFont: string
   radius: number
+}
+
+export interface UserSettings {
+  id: string
+  userId: string
+  accent: string
+  upRed: boolean
+  density: 'compact' | 'cozy' | 'loose' | string
+  monoFont: string
+  sansFont: string
+  radius: number
+}
+
+export interface BrokerLink {
+  id: string
+  broker: string
+  account?: string
+  linkedAt: string
+}
+
+export interface SyncPreference {
+  autoSync: boolean
+  positions: boolean
+  dividends: boolean
+  profile: boolean
+  notifications: boolean
 }
 
 export interface ApiResponse<T> {

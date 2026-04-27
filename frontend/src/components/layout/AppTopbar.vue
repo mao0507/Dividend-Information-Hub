@@ -19,10 +19,16 @@
     <!-- Action buttons -->
     <div class="flex gap-1.5">
       <button
-        v-for="icon in ['↓', '⌁', '⚙']"
-        :key="icon"
-        class="w-[30px] h-[30px] rounded-[6px] bg-surface-2 flex items-center justify-center text-[13px] text-content-soft hover:text-content transition-colors"
-      >{{ icon }}</button>
+        v-for="action in actions"
+        :key="action.key"
+        type="button"
+        :aria-label="action.label"
+        :title="action.label"
+        class="w-[30px] h-[30px] rounded-[6px] bg-surface-2 flex items-center justify-center text-content-soft hover:text-content transition-colors"
+        @click="onActionClick(action.to)"
+      >
+        <ThemedIcon :name="action.icon" size-class="w-[15px] h-[15px]" />
+      </button>
     </div>
 
     <!-- Avatar -->
@@ -32,14 +38,37 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import ThemedIcon from '@/components/icons/ThemedIcon.vue'
+import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
 
 defineProps<{ breadcrumbs?: string[] }>()
 
+const router = useRouter()
 const timeStr = ref('')
 
-function updateTime() {
+const actions: ReadonlyArray<{ key: string; icon: ThemedIconName; label: string; to: string }> = [
+  { key: 'export', icon: 'arrow-down-tray', label: '前往匯出設定', to: '/settings' },
+  { key: 'alerts', icon: 'bell', label: '前往提醒中心', to: '/alerts' },
+  { key: 'settings', icon: 'cog-6-tooth', label: '前往設定', to: '/settings' },
+]
+
+/**
+ * 更新即時時間字串。
+ * @returns {void}
+ */
+const updateTime = (): void => {
   const now = new Date()
   timeStr.value = now.toTimeString().slice(0, 8)
+}
+
+/**
+ * 點擊 Topbar action 後導向目標路由。
+ * @param {string} to 目標路由
+ * @returns {Promise<void>}
+ */
+const onActionClick = async (to: string): Promise<void> => {
+  await router.push(to)
 }
 
 updateTime()

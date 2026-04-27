@@ -3,9 +3,12 @@
     <div class="flex items-center justify-between">
       <span class="font-mono text-[10px] text-content-faint uppercase tracking-widest">{{ label }}</span>
       <div
-        class="w-6 h-6 rounded-md flex items-center justify-center text-[12px]"
+        class="w-6 h-6 rounded-md flex items-center justify-center text-[12px] text-content"
         :style="{ background: `${accent}18` }"
-      >{{ icon }}</div>
+      >
+        <ThemedIcon v-if="iconName" :name="iconName" size-class="w-3.5 h-3.5" />
+        <span v-else>{{ icon }}</span>
+      </div>
     </div>
     <div class="flex items-baseline gap-1.5">
       <span class="font-mono text-2xl font-semibold" :style="{ color: accent }">
@@ -18,12 +21,18 @@
 </template>
 
 <script setup lang="ts">
+import ThemedIcon from '@/components/icons/ThemedIcon.vue'
+import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
+
 defineProps<{
   label: string
   value: number | string
   unit?: string
   sub?: string
+  /** 後備：純文字或單一字元（非 emoji 圖示時使用） */
   icon?: string
+  /** 主題向量圖示（優先） */
+  iconName?: ThemedIconName
   accent?: string
 }>()
 </script>

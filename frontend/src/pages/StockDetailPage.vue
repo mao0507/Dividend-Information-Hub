@@ -42,11 +42,19 @@
 
           <!-- 操作按鈕 -->
           <div class="flex gap-2 shrink-0">
-            <button class="px-3 py-1.5 text-[12px] font-mono bg-surface-2 border border-border rounded-[8px] text-content-soft hover:text-content transition-colors">
-              ★ 加入自選
+            <button
+              type="button"
+              class="px-3 py-1.5 text-[12px] font-mono bg-surface-2 border border-border rounded-[8px] text-content-soft hover:text-content transition-colors inline-flex items-center gap-1.5"
+            >
+              <ThemedIcon name="star" size-class="w-3.5 h-3.5" />
+              加入自選
             </button>
-            <button class="px-3 py-1.5 text-[12px] font-mono bg-surface-2 border border-border rounded-[8px] text-content-soft hover:text-content transition-colors">
-              ⚡ 設提醒
+            <button
+              type="button"
+              class="px-3 py-1.5 text-[12px] font-mono bg-surface-2 border border-border rounded-[8px] text-content-soft hover:text-content transition-colors inline-flex items-center gap-1.5"
+            >
+              <ThemedIcon name="bolt" size-class="w-3.5 h-3.5" />
+              設提醒
             </button>
           </div>
         </div>
@@ -182,6 +190,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import StockChart from '@/components/chart/StockChart.vue'
 import VolumeBar from '@/components/chart/VolumeBar.vue'
 import UChip from '@/components/ui/UChip.vue'
+import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 import { stockApi } from '@/api/stock'
 import type { StockDetail, Dividend } from '@/types'
 

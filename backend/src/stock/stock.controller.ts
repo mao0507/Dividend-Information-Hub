@@ -1,7 +1,8 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
 import type { Request } from 'express'
 import { StockService } from './stock.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
+import { CreateHoldingLotDto } from './dto/create-holding-lot.dto'
 
 @Controller('stocks')
 @UseGuards(JwtAuthGuard)
@@ -47,6 +48,36 @@ export class StockController {
     return this.stock.getFeatured(user.id)
   }
 
+  @Post('holdings/lots')
+  createHoldingLot(@Req() req: Request, @Body() dto: CreateHoldingLotDto) {
+    const user = req.user as { id: string }
+    return this.stock.createHoldingLot(user.id, dto)
+  }
+
+  @Get('holdings/lots')
+  listHoldingLots(@Req() req: Request) {
+    const user = req.user as { id: string }
+    return this.stock.listHoldingLots(user.id)
+  }
+
+  @Get('holdings/allocation')
+  getPortfolioAllocation(@Req() req: Request) {
+    const user = req.user as { id: string }
+    return this.stock.getPortfolioAllocation(user.id)
+  }
+
+  @Get('holdings/dividend-income-since-buy')
+  getDividendIncomeSinceBuy(@Req() req: Request) {
+    const user = req.user as { id: string }
+    return this.stock.getDividendIncomeSinceBuy(user.id)
+  }
+
+  @Get('trading-calendar/closed-dates')
+  getTwseClosedDates(@Query('year') year?: string) {
+    const resolvedYear = year ? parseInt(year, 10) : new Date().getFullYear()
+    return this.stock.getTwseClosedDates(resolvedYear)
+  }
+
   @Get(':code')
   getDetail(@Param('code') code: string) {
     return this.stock.getDetail(code)
@@ -60,6 +91,11 @@ export class StockController {
   @Get(':code/price')
   getPrices(@Param('code') code: string, @Query('range') range?: string) {
     return this.stock.getPrices(code, range)
+  }
+
+  @Get(':code/price-series')
+  getPriceSeries(@Param('code') code: string, @Query('range') range?: string) {
+    return this.stock.getPriceSeries(code, range)
   }
 
   @Get(':code/peers')

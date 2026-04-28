@@ -17,6 +17,7 @@ model User {
   settings        UserSettings?
   watchlistGroups WatchlistGroup[]
   holdings        Holding[]
+  holdingLots     HoldingLot[]
   alertRules      AlertRule[]
   notifications   Notification[]
 }
@@ -34,6 +35,7 @@ model UserSettings {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// market: "TWSE" = 上市, "TPEX" = 上櫃
 model Stock {
   code      String   @id
   name      String
@@ -41,6 +43,7 @@ model Stock {
   sector    String
   market    String   @default("TWSE")
   isEtf     Boolean  @default(false)
+  isActive  Boolean  @default(true)
   pe        Float?
   marketCap BigInt?
   updatedAt DateTime @updatedAt
@@ -49,6 +52,7 @@ model Stock {
   prices         StockPrice[]
   watchlistItems WatchlistItem[]
   holdings       Holding[]
+  holdingLots    HoldingLot[]
 }
 
 model Dividend {
@@ -62,6 +66,7 @@ model Dividend {
   exDate      DateTime?
   payDate     DateTime?
   announcedAt DateTime?
+  preExClose  Float?
   fillDays    Int?
   filled      Boolean   @default(false)
 
@@ -84,6 +89,13 @@ model StockPrice {
 
   @@unique([stockCode, date])
   @@index([stockCode, date])
+}
+
+/** 市場資料同步進度（例如 TWSE 日線回填游標） */
+model MarketSyncState {
+  key        String    @id
+  lastOkDate DateTime? @db.Date
+  updatedAt  DateTime  @updatedAt
 }
 
 model WatchlistGroup {
@@ -125,6 +137,22 @@ model Holding {
   stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model HoldingLot {
+  id        String   @id @default(cuid())
+  userId    String
+  stockCode String
+  buyTimestamp DateTime
+  buyPrice  Float
+  buyQuantity Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@index([userId, stockCode, buyTimestamp])
+  @@index([userId, buyTimestamp])
 }
 
 model AlertRule {

@@ -1,0 +1,31 @@
+{
+  "stocks": [
+    {
+      "code": "2330",
+      "name": "台積電",
+      "nameAlias": null,
+      "sector": "半導體業",
+      "isEtf": false,
+      "pe": null,
+      "marketCap": null
+    },
+    {
+      "code": "0050",
+      "name": "元大台灣50",
+      "nameAlias": null,
+      "sector": "ETF",
+      "isEtf": true,
+      "pe": null,
+      "marketCap": null
+    },
+    {
+      "code": "031234",
+      "name": "僅測試權證樣本",
+      "nameAlias": null,
+      "sector": "權證及其他",
+      "isEtf": false,
+      "pe": null,
+      "marketCap": null
+    }
+  ]
+}

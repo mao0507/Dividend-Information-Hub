@@ -108,17 +108,10 @@
               placeholder="例如：台積電除息提醒"
             />
             <div class="grid grid-cols-2 gap-2">
-              <select
+              <USelect
                 v-model="newRule.type"
-                :class="themedSelectClass"
-              >
-                <option value="exDiv">除息</option>
-                <option value="payment">發放</option>
-                <option value="fill">填息</option>
-                <option value="yield">殖利率</option>
-                <option value="drop">跌幅</option>
-                <option value="announce">公告</option>
-              </select>
+                :options="ruleTypeOptions"
+              />
               <input
                 v-model="newRule.stockCode"
                 class="w-full bg-surface border border-border rounded px-2 py-1.5 text-[12px] text-content outline-none focus:border-accent/60"
@@ -155,9 +148,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
+import USelect from '@/components/ui/USelect.vue'
 import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
 import { alertsApi } from '@/api/alerts'
-import { themedSelectClass } from '@/constants/form-control-styles'
 import type { AlertRule, Notification } from '@/types'
 
 type NotificationTab = 'all' | 'exDiv' | 'payment' | 'news' | 'unread'
@@ -179,6 +172,15 @@ const newRule = ref<{ label: string; type: string; stockCode: string }>({
   type: 'exDiv',
   stockCode: '',
 })
+
+const ruleTypeOptions: Array<{ value: string; label: string }> = [
+  { value: 'exDiv', label: '除息' },
+  { value: 'payment', label: '發放' },
+  { value: 'fill', label: '填息' },
+  { value: 'yield', label: '殖利率' },
+  { value: 'drop', label: '跌幅' },
+  { value: 'announce', label: '公告' },
+]
 
 const unreadCount = computed<number>(() => notifications.value.filter((n) => !n.isRead).length)
 

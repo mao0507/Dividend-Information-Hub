@@ -93,18 +93,19 @@
               </div>
               <div class="space-y-1">
                 <label class="font-mono text-[10px] text-content-faint uppercase tracking-widest">Up Color</label>
-                <select v-model="appearance.upRed" :class="themedSelectClass">
-                  <option :value="true">上漲紅、下跌綠</option>
-                  <option :value="false">上漲綠、下跌紅</option>
-                </select>
+                <USelect
+                  :model-value="upRedOption"
+                  :options="upColorOptions"
+                  @update:model-value="setUpRedOption"
+                />
               </div>
               <div class="space-y-1">
                 <label class="font-mono text-[10px] text-content-faint uppercase tracking-widest">Density</label>
-                <select v-model="appearance.density" :class="themedSelectClass">
-                  <option value="compact">compact</option>
-                  <option value="cozy">cozy</option>
-                  <option value="loose">loose</option>
-                </select>
+                <USelect
+                  :model-value="densityOption"
+                  :options="densityOptions"
+                  @update:model-value="setDensityOption"
+                />
               </div>
               <div class="space-y-1">
                 <label class="font-mono text-[10px] text-content-faint uppercase tracking-widest">Radius</label>
@@ -137,8 +138,9 @@
 import { onMounted, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
+import USelect from '@/components/ui/USelect.vue'
 import { settingsApi } from '@/api/settings'
-import { themedCheckboxClass, themedSelectClass } from '@/constants/form-control-styles'
+import { themedCheckboxClass } from '@/constants/form-control-styles'
 import { useTweaksStore } from '@/stores/tweaks'
 import type { BrokerLink, SyncPreference, TweakSettings } from '@/types'
 
@@ -172,6 +174,17 @@ const brokerCards = [
   { name: '國泰證券' },
 ]
 
+const upColorOptions: Array<{ value: string; label: string }> = [
+  { value: 'true', label: '上漲紅、下跌綠' },
+  { value: 'false', label: '上漲綠、下跌紅' },
+]
+
+const densityOptions: Array<{ value: string; label: string }> = [
+  { value: 'compact', label: 'compact' },
+  { value: 'cozy', label: 'cozy' },
+  { value: 'loose', label: 'loose' },
+]
+
 const syncOptions: Array<{ key: keyof SyncPreference; label: string }> = [
   { key: 'autoSync', label: '自動同步' },
   { key: 'positions', label: '部位資料' },
@@ -199,6 +212,9 @@ const appearance = ref<TweakSettings>({
   sansFont: 'Inter',
   radius: 10,
 })
+
+const upRedOption = ref<string>('true')
+const densityOption = ref<string>('cozy')
 
 /**
  * 判斷券商是否已連結。
@@ -268,9 +284,29 @@ const saveAppearance = async (): Promise<void> => {
   }
 }
 
+/**
+ * 變更上漲顏色配置（字串值轉布林）
+ * @param value 選項值
+ */
+const setUpRedOption = (value: string): void => {
+  upRedOption.value = value
+  appearance.value.upRed = value === 'true'
+}
+
+/**
+ * 變更顯示密度
+ * @param value 選項值
+ */
+const setDensityOption = (value: string): void => {
+  densityOption.value = value
+  appearance.value.density = value as TweakSettings['density']
+}
+
 watch(
   appearance,
   (next) => {
+    upRedOption.value = String(next.upRed)
+    densityOption.value = next.density
     tweaks.setAll(next)
   },
   { deep: true },

@@ -80,8 +80,14 @@
               >{{ r }}</button>
             </div>
           </div>
-          <StockChart :width="chartW" :height="260" :series="closePrices" :show-grid="true" :show-crosshair="false" class="w-full" />
-          <VolumeBar :series="volumes" :width="chartW" :height="44" class="w-full border-t border-border" />
+          <TvChart
+            :candles="prices"
+            :twse-closed-dates="twseClosedDates"
+            :ex-dates="exDateStrings"
+            :loading="pricesLoading"
+            :height="304"
+            class="w-full"
+          />
         </div>
 
         <!-- 配息歷史 10 年 -->
@@ -187,12 +193,11 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import StockChart from '@/components/chart/StockChart.vue'
-import VolumeBar from '@/components/chart/VolumeBar.vue'
+import TvChart from '@/components/chart/TvChart.vue'
 import UChip from '@/components/ui/UChip.vue'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 import { stockApi } from '@/api/stock'
-import type { StockDetail, Dividend } from '@/types'
+import type { StockDetail, Dividend, OhlcvPoint } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -227,22 +232,25 @@ interface FillProgress {
 
 const code = computed<string>(() => route.params.code as string)
 const activeRange = ref<string>('6M')
-const chartW = ref<number>(900)
 
 const stock = ref<(StockDetail & { streak: number; annualCash: number; yieldPct: number }) | null>(null)
 const dividends = ref<Dividend[]>([])
-const prices = ref<{ date: string; close: number; volume: number }[]>([])
+const prices = ref<OhlcvPoint[]>([])
+const twseClosedDates = ref<string[]>([])
+const pricesLoading = ref<boolean>(false)
 const peers = ref<PeerItem[]>([])
 const fillProgress = ref<FillProgress | null>(null)
 const loading = ref<boolean>(true)
 
 const latestDiv = computed<Dividend | null>(() => dividends.value.at(-1) ?? null)
 
-/** 收盤價序列（供 StockChart 使用） */
-const closePrices = computed<number[]>(() => prices.value.map((p) => p.close))
-
-/** 成交量序列（供 VolumeBar 使用） */
-const volumes = computed<number[]>(() => prices.value.map((p) => Number(p.volume)))
+/** 除息日字串陣列（供 TvChart 標記使用） */
+const exDateStrings = computed<string[]>(() =>
+  dividends.value
+    .map((d) => d.exDate)
+    .filter((d): d is string => !!d)
+    .map((d) => d.slice(0, 10)),
+)
 
 /** KPI 6格資料 */
 const kpiItems = computed<{ label: string; value: string; color?: string }[]>(() => {
@@ -290,6 +298,35 @@ const formatCap = (cap: number): string => {
   return `${cap}`
 }
 
+/**
+ * 從股價列抽取涉及年份
+ * @param rows K 線列
+ * @returns 年份陣列（遞增且去重）
+ */
+const extractYearsFromCandles = (rows: OhlcvPoint[]): number[] =>
+  [...new Set(
+    rows
+      .map((row) => Number.parseInt(String(row.date).slice(0, 4), 10))
+      .filter((y) => Number.isFinite(y) && y >= 1990 && y <= 2999),
+  )].sort((a, b) => a - b)
+
+/**
+ * 載入對應年度 TWSE 休市日期
+ * @param rows K 線列
+ * @returns Promise<void>
+ */
+const loadTwseClosedDates = async (rows: OhlcvPoint[]): Promise<void> => {
+  const years = extractYearsFromCandles(rows)
+  if (!years.length) {
+    twseClosedDates.value = []
+    return
+  }
+  const closedByYear = await Promise.all(
+    years.map((y) => stockApi.getTwseClosedDates(y)),
+  )
+  twseClosedDates.value = [...new Set(closedByYear.flat())]
+}
+
 /** 載入個股全部資料 */
 const loadAll = async (): Promise<void> => {
   loading.value = true
@@ -304,7 +341,12 @@ const loadAll = async (): Promise<void> => {
 
     if (detailRes.status === 'fulfilled') stock.value = detailRes.value.data as typeof stock.value
     if (divRes.status === 'fulfilled') dividends.value = divRes.value.data
-    if (priceRes.status === 'fulfilled') prices.value = priceRes.value.data
+    if (priceRes.status === 'fulfilled') {
+      prices.value = priceRes.value.data
+      await loadTwseClosedDates(prices.value)
+    } else {
+      twseClosedDates.value = []
+    }
     if (peerRes.status === 'fulfilled') peers.value = peerRes.value.data as unknown as PeerItem[]
     if (fillRes.status === 'fulfilled') fillProgress.value = fillRes.value.data as unknown as FillProgress
   } finally {
@@ -314,8 +356,17 @@ const loadAll = async (): Promise<void> => {
 
 /** 切換時間範圍時重新載入股價 */
 const loadPrices = async (): Promise<void> => {
-  const res = await stockApi.getPrice(code.value, activeRange.value)
-  prices.value = res.data
+  pricesLoading.value = true
+  try {
+    const res = await stockApi.getPrice(code.value, activeRange.value)
+    prices.value = res.data
+    await loadTwseClosedDates(prices.value)
+  } catch {
+    prices.value = []
+    twseClosedDates.value = []
+  } finally {
+    pricesLoading.value = false
+  }
 }
 
 watch(activeRange, loadPrices)

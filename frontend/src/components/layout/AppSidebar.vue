@@ -78,6 +78,7 @@ const navSections: Array<{ group: string; items: NavItem[] }> = [
       { to: '/dashboard', icon: 'presentation-chart-line', label: '儀表板' },
       { to: '/calendar', icon: 'calendar', label: '除息行事曆' },
       { to: '/watchlist', icon: 'star', label: '自選股', badge: '8' },
+      { to: '/holdings', icon: 'archive-box', label: '持股管理' },
       { to: '/ranking', icon: 'arrow-trending-up', label: '高股息排行' },
       { to: '/viz', icon: 'squares-2x2', label: '視覺化分析' },
     ],

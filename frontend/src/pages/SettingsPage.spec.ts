@@ -76,6 +76,12 @@ describe('SettingsPage themed controls', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
+          USelect: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue'],
+            template:
+              '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>',
+          },
         },
       },
     })
@@ -92,9 +98,7 @@ describe('SettingsPage themed controls', () => {
     await appearanceButton!.trigger('click')
     await nextTick()
 
-    const select = wrapper.get('select')
-    expect(select.classes()).toContain('focus-visible:ring-2')
-    expect(select.classes()).toContain('disabled:cursor-not-allowed')
+    expect(wrapper.findAll('select')).toHaveLength(2)
   })
 
   it('calls patchSync when checkbox toggles', async () => {
@@ -102,6 +106,12 @@ describe('SettingsPage themed controls', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
+          USelect: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue'],
+            template:
+              '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>',
+          },
         },
       },
     })
@@ -116,6 +126,12 @@ describe('SettingsPage themed controls', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
+          USelect: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue'],
+            template:
+              '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>',
+          },
         },
       },
     })

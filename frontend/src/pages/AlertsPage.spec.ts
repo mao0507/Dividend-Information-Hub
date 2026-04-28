@@ -42,6 +42,12 @@ describe('AlertsPage themed select behavior', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
+          USelect: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue'],
+            template:
+              '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>',
+          },
         },
       },
     })

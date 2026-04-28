@@ -1,6 +1,3 @@
-export const themedSelectClass =
-  'w-full appearance-none bg-surface border border-border rounded-[8px] px-2.5 py-2 text-[12px] text-content font-mono transition-colors outline-none hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent disabled:opacity-60 disabled:cursor-not-allowed'
-
 export const themedSelectTriggerClass =
   'w-full relative text-left bg-surface border border-border rounded-[8px] px-2.5 py-2 text-[12px] text-content font-mono transition-colors outline-none hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent disabled:opacity-60 disabled:cursor-not-allowed'
 

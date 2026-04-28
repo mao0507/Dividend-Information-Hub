@@ -46,7 +46,12 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
+  /** 清除本地 session 狀態，不發 API 請求（用於 token 失效的強制登出）。 */
+  const clearSession = (): void => {
+    user.value = null
+  }
+
   const isLoggedIn = () => user.value !== null
 
-  return { user, isLoading, fetchMe, login, register, logout, isLoggedIn }
+  return { user, isLoading, fetchMe, login, register, logout, clearSession, isLoggedIn }
 })

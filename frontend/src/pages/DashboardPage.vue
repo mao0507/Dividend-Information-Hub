@@ -5,53 +5,46 @@
       <!-- KPI 4-card strip -->
       <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
-          label="今日除息"
-          :value="summary?.todayExDiv.count ?? 0"
-          unit="檔"
-          :sub="summary?.todayExDiv.codes.slice(0, 3).join('・') || '—'"
-          icon-name="bolt"
-          accent="#22c55e"
-        />
-        <KpiCard
-          label="本週除息"
-          :value="summary?.weekExDiv.count ?? 0"
-          unit="檔"
-          :sub="`自選股 ${summary?.weekExDiv.watchlistCount ?? 0} 檔`"
-          icon-name="calendar"
-          accent="#3b82f6"
-        />
-        <KpiCard
-          label="待填息"
-          :value="summary?.pendingFill.count ?? 0"
-          unit="檔"
-          :sub="summary?.pendingFill.maxDays ? `最長 ${summary.pendingFill.maxDays} 日` : '—'"
-          icon-name="clock"
-          accent="#f59e0b"
-        />
-        <KpiCard
-          label="下次入帳"
-          :value="summary?.nextPayout.estimatedAmount ?? 0"
-          unit="元"
-          :sub="summary?.nextPayout.date || '—'"
-          icon-name="banknotes"
-          accent="#a855f7"
+          v-for="card in topSummaryCards"
+          :key="card.key"
+          :label="card.label"
+          :value="card.value"
+          :unit="card.unit"
+          :sub="card.sub"
+          :icon-name="card.iconName"
+          :accent="card.accent"
         />
       </div>
 
-      <!-- Accumulated income banner -->
-      <div v-if="summary" class="flex items-center gap-4 px-5 py-3 bg-surface-2 border border-border rounded-[var(--radius)]">
-        <span class="text-content-faint text-[11px] font-mono uppercase tracking-widest">累積股息收入</span>
-        <span class="text-2xl font-mono font-semibold text-accent">
-          NT$ {{ summary.accumulatedIncome.toLocaleString() }}
-        </span>
-        <UChip
-          :color="summary.yoyPct >= 0 ? 'up' : 'down'"
-          :bg="summary.yoyPct >= 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)'"
-        >
-          {{ summary.yoyPct >= 0 ? '+' : '' }}{{ summary.yoyPct.toFixed(1) }}% YoY
-        </UChip>
-        <div class="flex-1" />
-        <span class="text-[10px] text-content-faint font-mono">截至 {{ today }}</span>
+      <div
+        v-if="summary || summaryLoadFailed"
+        data-test="combined-summary-card"
+        class="bg-surface-2 border border-border rounded-[var(--radius)] px-5 py-4"
+      >
+        <div class="flex items-center gap-3">
+          <span class="text-content-faint text-[11px] font-mono uppercase tracking-widest">累積股息收入</span>
+          <UChip
+            :color="summary?.yoyPct != null && summary.yoyPct >= 0 ? 'up' : 'down'"
+            :bg="summary?.yoyPct != null && summary.yoyPct >= 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)'"
+          >
+            {{ accumulatedIncomeYoyDisplay }}
+          </UChip>
+          <div class="flex-1" />
+          <RouterLink to="/holdings" class="font-mono text-[11px] text-accent hover:underline">
+            前往持股管理 →
+          </RouterLink>
+        </div>
+        <div class="mt-3 flex items-end gap-8">
+          <div class="min-w-[220px]">
+            <div class="text-content-faint text-[10px] font-mono uppercase tracking-widest">累積配息</div>
+            <div class="text-2xl font-mono font-semibold text-accent">{{ accumulatedIncomeDisplay }}</div>
+            <div class="text-[10px] text-content-faint font-mono">截至 {{ accumulatedIncomeAsOfDisplay }}</div>
+          </div>
+          <div class="min-w-[220px]">
+            <div class="text-content-faint text-[10px] font-mono uppercase tracking-widest">總投資金額</div>
+            <div class="text-xl font-mono font-semibold text-content">{{ totalInvestedDisplay }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- Main content: chart + sidebar -->
@@ -109,12 +102,14 @@
               <span class="font-mono text-xs text-up">+0.58%</span>
             </template>
           </div>
-          <StockChart
-            :width="chartWidth"
+          <div v-if="heroDataNotice" class="px-5 pb-2 text-[11px] font-mono text-content-faint">
+            {{ heroDataNotice }}
+          </div>
+          <TvChart
+            :candles="heroCandles"
+            :twse-closed-dates="heroTwseClosedDates"
+            :loading="heroPricesLoading"
             :height="280"
-            :show-grid="true"
-            :show-crosshair="true"
-            :series="heroSeriesForChart"
             class="w-full"
           />
         </div>
@@ -219,37 +214,94 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import StockChart from '@/components/chart/StockChart.vue'
+import TvChart from '@/components/chart/TvChart.vue'
 import SparkLine from '@/components/chart/SparkLine.vue'
 import UChip from '@/components/ui/UChip.vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import { dashboardApi } from '@/api/dashboard'
 import { watchlistApi } from '@/api/watchlist'
 import { stockApi } from '@/api/stock'
-import type { DashboardSummary, CalendarEvent, WatchlistGroup, WatchlistItem, StockDetail } from '@/types'
+import type {
+  DashboardSummary,
+  CalendarEvent,
+  WatchlistGroup,
+  WatchlistItem,
+  StockDetail,
+  OhlcvPoint,
+} from '@/types'
+import {
+  buildDashboardTopCards,
+  type DashboardTopCard,
+  type DashboardCardState,
+} from '@/utils/dashboardTopCards'
 
 const router = useRouter()
 const RANGES = ['1W', '1M', '3M', '6M', '1Y', 'MAX']
 const activeRange = ref('6M')
-const chartWidth = ref(800)
 
 const summary = ref<DashboardSummary | null>(null)
 const upcoming = ref<CalendarEvent[]>([])
 const watchlistGroups = ref<WatchlistGroup[]>([])
 const watchlistLoading = ref(true)
 const heroStock = ref<StockDetail | null>(null)
-const heroCloses = ref<number[]>([])
+const heroCandles = ref<OhlcvPoint[]>([])
+const heroTwseClosedDates = ref<string[]>([])
+const heroPricesLoading = ref<boolean>(false)
+const heroDataNotice = ref<string | null>(null)
+const summaryLoadFailed = ref<boolean>(false)
+let heroPriceRequestToken = 0
 
-const heroSeriesForChart = computed<number[] | undefined>(() =>
-  heroCloses.value.length >= 2 ? heroCloses.value : undefined,
+const today = computed<string>(() => new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }))
+const summaryAsOf = computed<string | null>(() =>
+  summary.value?.asOf
+    ? new Date(summary.value.asOf).toLocaleDateString('zh-TW')
+    : null,
+)
+const accumulatedIncomeState = computed<DashboardCardState>(() => {
+  if (summaryLoadFailed.value) return 'error'
+  return summary.value?.accumulatedIncomeState ?? 'empty'
+})
+const accumulatedIncomeDisplay = computed<string>(() => {
+  if (accumulatedIncomeState.value !== 'ready') return '--'
+  return Number.isFinite(summary.value?.accumulatedIncome)
+    ? `NT$ ${Number(summary.value?.accumulatedIncome).toLocaleString()}`
+    : '--'
+})
+const accumulatedIncomeYoyDisplay = computed<string>(() => {
+  if (accumulatedIncomeState.value !== 'ready') return '資料同步中'
+  const yoy = summary.value?.yoyPct
+  if (!Number.isFinite(yoy)) return '資料時間未知'
+  const v = Number(yoy)
+  return `${v >= 0 ? '+' : ''}${v.toFixed(1)}% YoY`
+})
+const accumulatedIncomeAsOfDisplay = computed<string>(() =>
+  summaryAsOf.value ?? today.value,
+)
+const totalInvestedDisplay = computed<string>(() =>
+  `NT$ ${(summary.value?.totalInvestedAmount ?? 0).toLocaleString()}`,
+)
+const topSummaryCards = computed<DashboardTopCard[]>(() =>
+  buildDashboardTopCards({
+    summary: summary.value,
+    asOf: summaryAsOf.value,
+    hasError: summaryLoadFailed.value,
+  }),
 )
 
-const today = computed(() => new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }))
-
-function fmtMonth(d: string) {
+/**
+ * 格式化月份字串。
+ * @param d 日期字串
+ * @returns 月份文字
+ */
+const fmtMonth = (d: string): string => {
   return new Date(d).toLocaleDateString('zh-TW', { month: 'short' })
 }
-function fmtDay(d: string) {
+/**
+ * 格式化日期為當月日數。
+ * @param d 日期字串
+ * @returns 日期數字
+ */
+const fmtDay = (d: string): number => {
   return new Date(d).getDate()
 }
 
@@ -274,16 +326,59 @@ const dashYield = (item: WatchlistItem): string => {
   return `${((cash / px) * 100).toFixed(1)}%`
 }
 
-const loadHeroPrices = async () => {
+/**
+ * 從股價列抽取涉及年份
+ * @param rows K 線列
+ * @returns 年份陣列（遞增且去重）
+ */
+const extractYearsFromCandles = (rows: OhlcvPoint[]): number[] =>
+  [...new Set(
+    rows
+      .map((row) => Number.parseInt(String(row.date).slice(0, 4), 10))
+      .filter((y) => Number.isFinite(y) && y >= 1990 && y <= 2999),
+  )].sort((a, b) => a - b)
+
+const loadHeroPrices = async (): Promise<void> => {
+  const requestToken = ++heroPriceRequestToken
   if (!heroStock.value) {
-    heroCloses.value = []
+    if (requestToken === heroPriceRequestToken) {
+      heroCandles.value = []
+      heroTwseClosedDates.value = []
+      heroDataNotice.value = null
+      heroPricesLoading.value = false
+    }
     return
   }
+  heroPricesLoading.value = true
   try {
-    const res = await stockApi.getPrice(heroStock.value.code, activeRange.value)
-    heroCloses.value = res.data.map((p) => p.close)
+    const res = await stockApi.getPriceSeries(heroStock.value.code, activeRange.value)
+    if (requestToken !== heroPriceRequestToken) return
+    heroCandles.value = res.data.data
+    const diagnostics = res.data.diagnostics
+    heroDataNotice.value = diagnostics.status === 'AVAILABLE'
+      ? null
+      : `${diagnostics.reason}${diagnostics.lastSyncedTradingDate ? `（最後同步：${diagnostics.lastSyncedTradingDate}）` : ''}`
+    const years = extractYearsFromCandles(res.data.data)
+    try {
+      const closedByYear = await Promise.all(
+        years.map((y) => stockApi.getTwseClosedDates(y)),
+      )
+      if (requestToken !== heroPriceRequestToken) return
+      heroTwseClosedDates.value = [...new Set(closedByYear.flat())]
+    } catch {
+      if (requestToken !== heroPriceRequestToken) return
+      heroTwseClosedDates.value = []
+      heroDataNotice.value = heroDataNotice.value ?? '休市標記暫時不可用，已顯示可用 K 線資料'
+    }
   } catch {
-    heroCloses.value = []
+    if (requestToken !== heroPriceRequestToken) return
+    heroCandles.value = []
+    heroTwseClosedDates.value = []
+    heroDataNotice.value = '股價資料暫時無法取得'
+  } finally {
+    if (requestToken === heroPriceRequestToken) {
+      heroPricesLoading.value = false
+    }
   }
 }
 
@@ -303,8 +398,9 @@ onMounted(async () => {
     upcoming.value = upRes.data
     watchlistGroups.value = wlRes.data
     heroStock.value = featRes.data.featured
+    summaryLoadFailed.value = false
   } catch {
-    // silently fail — mock data already seeded
+    summaryLoadFailed.value = true
   } finally {
     watchlistLoading.value = false
   }

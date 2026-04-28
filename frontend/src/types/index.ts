@@ -1,3 +1,31 @@
+export interface OhlcvPoint {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export type PriceAvailabilityStatus =
+  | 'AVAILABLE'
+  | 'MISSING_IN_DB'
+  | 'SYNC_NOT_READY'
+  | 'SOURCE_UNAVAILABLE'
+
+export interface StockPriceDiagnostics {
+  status: PriceAvailabilityStatus
+  reason: string
+  fallbackAttempted: boolean
+  lastSyncedTradingDate: string | null
+  syncUpdatedAt: string | null
+}
+
+export interface StockPriceSeries {
+  data: OhlcvPoint[]
+  diagnostics: StockPriceDiagnostics
+}
+
 export interface Stock {
   code: string
   name: string
@@ -117,9 +145,26 @@ export interface DashboardSummary {
   todayExDiv: { count: number; codes: string[] }
   weekExDiv: { count: number; watchlistCount: number }
   pendingFill: { count: number; maxDays: number }
-  nextPayout: { date: string; estimatedAmount: number }
-  accumulatedIncome: number
-  yoyPct: number
+  nextPayout: { date: string | null; estimatedAmount: number }
+  accumulatedIncome: number | null
+  accumulatedIncomeState: 'ready' | 'empty' | 'stale' | 'error'
+  yoyPct: number | null
+  asOf: string | null
+  totalInvestedAmount: number
+  portfolioAllocation: Array<{
+    stockCode: string
+    investedAmount: number
+    ratio: number
+  }>
+  dividendIncomeSinceBuy: number
+}
+
+export interface HoldingLot {
+  id: string
+  stockCode: string
+  buyTimestamp: string
+  buyPrice: number
+  buyQuantity: number
 }
 
 export interface DripInput {

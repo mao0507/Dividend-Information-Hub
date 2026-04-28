@@ -1,5 +1,15 @@
 import api from './index'
-import type { StockDetail, Dividend, RankingStock, RankingPreset } from '@/types'
+import type {
+  StockDetail,
+  Dividend,
+  OhlcvPoint,
+  RankingStock,
+  RankingPreset,
+  StockPriceSeries,
+  HoldingLot,
+} from '@/types'
+
+const twseClosedDateCache = new Map<number, string[]>()
 
 export const stockApi = {
   search: (q: string, limit = 10) =>
@@ -14,10 +24,27 @@ export const stockApi = {
     api.get<Dividend[]>(`/stocks/${code}/dividends`),
 
   getPrice: (code: string, range = '6M') =>
-    api.get<{ date: string; close: number; volume: number }[]>(
+    api.get<OhlcvPoint[]>(
       `/stocks/${code}/price`,
       { params: { range } },
     ),
+
+  getPriceSeries: (code: string, range = '6M') =>
+    api.get<StockPriceSeries>(
+      `/stocks/${code}/price-series`,
+      { params: { range } },
+    ),
+
+  getTwseClosedDates: async (year: number): Promise<string[]> => {
+    if (twseClosedDateCache.has(year)) {
+      return twseClosedDateCache.get(year) ?? []
+    }
+    const res = await api.get<string[]>('/stocks/trading-calendar/closed-dates', {
+      params: { year },
+    })
+    twseClosedDateCache.set(year, res.data)
+    return res.data
+  },
 
   getPeers: (code: string) =>
     api.get<StockDetail[]>(`/stocks/${code}/peers`),
@@ -39,4 +66,22 @@ export const stockApi = {
   }) => api.get<{ data: RankingStock[]; total: number }>('/stocks/ranking', { params }),
 
   getRankingPresets: () => api.get<RankingPreset[]>('/stocks/ranking/presets'),
+
+  createHoldingLot: (payload: {
+    stockCode: string
+    buyTimestamp: string
+    buyPrice: number
+    buyQuantity: number
+  }) => api.post<HoldingLot>('/stocks/holdings/lots', payload),
+
+  getHoldingLots: () => api.get<HoldingLot[]>('/stocks/holdings/lots'),
+
+  getPortfolioAllocation: () =>
+    api.get<{
+      totalInvestedAmount: number
+      slices: Array<{ stockCode: string; investedAmount: number; ratio: number }>
+    }>('/stocks/holdings/allocation'),
+
+  getDividendIncomeSinceBuy: () =>
+    api.get<number>('/stocks/holdings/dividend-income-since-buy'),
 }

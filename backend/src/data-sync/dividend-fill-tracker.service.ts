@@ -61,11 +61,34 @@ export class DividendFillTrackerService {
       `FillTracker: 查核 ${pendingDividends.length} 筆，填息 ${filledCount} 筆，略過 ${skippedCount} 筆`,
     );
 
+    await this.batchRecalculateEarnedDividend();
+
     return {
       checked: pendingDividends.length,
       filled: filledCount,
       skipped: skippedCount,
     };
+  };
+
+  /**
+   * 以單一 JOIN SQL 批量重算所有 Holding.earnedDividend。
+   * 在 DividendFillTracker 每日跑完後觸發，確保 filled 狀態更新後快取同步。
+   */
+  readonly batchRecalculateEarnedDividend = async (): Promise<void> => {
+    await this.prisma.$executeRaw`
+      UPDATE "Holding" h
+      SET "earnedDividend" = (
+        SELECT COALESCE(SUM(d.cash * l."buyQuantity"), 0)
+        FROM "HoldingLot" l
+        JOIN "Dividend" d ON d."stockCode" = l."stockCode"
+        WHERE d.filled = TRUE
+          AND d."payDate" IS NOT NULL
+          AND d."payDate" >= l."buyTimestamp"
+          AND l."userId" = h."userId"
+          AND l."stockCode" = h."stockCode"
+      )
+    `;
+    this.logger.log('FillTracker: Holding.earnedDividend batch 重算完成');
   };
 
   /**

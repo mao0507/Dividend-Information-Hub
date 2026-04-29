@@ -20,6 +20,7 @@ describe('DividendFillTrackerService', () => {
   let prisma: {
     dividend: { findMany: jest.Mock; update: jest.Mock };
     stockPrice: { findMany: jest.Mock };
+    $executeRaw: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -29,6 +30,7 @@ describe('DividendFillTrackerService', () => {
         update: jest.fn(),
       },
       stockPrice: { findMany: jest.fn().mockResolvedValue([]) },
+      $executeRaw: jest.fn().mockResolvedValue(0),
     };
 
     const mod = await Test.createTestingModule({

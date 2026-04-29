@@ -12,6 +12,7 @@ import { VizModule } from './viz/viz.module'
 import { AlertsModule } from './alerts/alerts.module'
 import { SettingsModule } from './settings/settings.module'
 import { DataSyncModule } from './data-sync/data-sync.module'
+import { HoldingsModule } from './holdings/holdings.module'
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DataSyncModule } from './data-sync/data-sync.module'
     AlertsModule,
     SettingsModule,
     DataSyncModule,
+    HoldingsModule,
   ],
 })
 export class AppModule {}

@@ -127,15 +127,17 @@ model WatchlistItem {
 
 model Holding {
   id        String   @id @default(cuid())
-  userId    String
-  stockCode String
-  shares    Int
-  avgCost   Float
-  boughtAt  DateTime @default(now())
+  userId         String
+  stockCode      String
+  shares         Int
+  avgCost        Float
+  boughtAt       DateTime @default(now())
+  earnedDividend Float    @default(0)
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
 
+  @@unique([userId, stockCode])
   @@index([userId])
 }
 

@@ -160,7 +160,7 @@ export class DashboardService {
     const holdingLots = await this.prisma.holdingLot.findMany({
       where: { userId },
       select: { stockCode: true, buyPrice: true, buyQuantity: true },
-    }).catch(() => [])
+    }).catch((): Array<{ stockCode: string; buyPrice: number; buyQuantity: number }> => [])
 
     const watchlistSet = new Set(watchlistCodes.map((w) => w.stockCode))
 

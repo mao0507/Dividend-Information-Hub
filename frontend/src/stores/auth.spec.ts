@@ -8,7 +8,7 @@ const authApiMock = vi.hoisted(() => ({
   me: vi.fn(),
 }))
 
-vi.mock('@/api/auth', () => ({
+vi.mock('@/services/api/auth', () => ({
   authApi: authApiMock,
 }))
 

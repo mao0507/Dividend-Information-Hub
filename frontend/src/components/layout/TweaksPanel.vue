@@ -58,15 +58,19 @@
         </div>
 
         <!-- Radius -->
-        <USlider
-          label="圓角"
-          :model-value="tweaks.settings.radius"
-          :min="0"
-          :max="24"
-          :step="2"
-          unit="px"
-          @update:model-value="tweaks.setTweak('radius', $event)"
-        />
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center">
+            <span class="text-[11px] text-content-soft">圓角</span>
+            <span class="font-mono text-xs text-accent">{{ tweaks.settings.radius }}px</span>
+          </div>
+          <Slider
+            :model-value="tweaks.settings.radius"
+            :min="0"
+            :max="24"
+            :step="2"
+            @update:model-value="tweaks.setTweak('radius', $event as number)"
+          />
+        </div>
       </div>
     </Transition>
   </div>
@@ -75,7 +79,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useTweaksStore } from '@/stores/tweaks'
-import USlider from '@/components/ui/USlider.vue'
+import Slider from 'primevue/slider'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 
 const tweaks = useTweaksStore()

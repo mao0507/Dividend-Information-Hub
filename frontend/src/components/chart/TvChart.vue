@@ -153,7 +153,6 @@ const applyTheme = (): void => {
     },
     timeScale: {
       borderColor: 'rgba(255,255,255,0.06)',
-      textColor: 'rgba(255,255,255,0.38)',
       tickMarkFormatter: (time: Time): string => {
         const dayKey = (() => {
           if (typeof time === 'string') return time

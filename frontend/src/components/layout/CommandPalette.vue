@@ -80,7 +80,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { stockApi } from '@/api/stock'
+import { stockApi } from '@/services/api/stock'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
 

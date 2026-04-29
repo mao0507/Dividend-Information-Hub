@@ -15,6 +15,7 @@
     "axios": "^1.15.2",
     "lightweight-charts": "^4.2.3",
     "pinia": "^3.0.4",
+    "primevue": "^4.5.5",
     "sortablejs": "^1.15.7",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"

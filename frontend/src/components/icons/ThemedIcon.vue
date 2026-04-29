@@ -148,6 +148,12 @@
       stroke-linejoin="round"
       d="M12 6v12m-3.75-7.5h7.5m-7.5 3h7.5M12 3.75c-1.036 0-1.875.84-1.875 1.875v0c0 1.036.84 1.875 1.875 1.875h0c1.036 0 1.875.84 1.875 1.875v0c0 1.035-.84 1.875-1.875 1.875"
     />
+    <path
+      v-else-if="name === 'archive-box'"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+    />
   </svg>
 </template>
 
@@ -178,6 +184,7 @@ export type ThemedIconName =
   | 'squares-2x2'
   | 'presentation-chart-line'
   | 'currency-dollar'
+  | 'archive-box'
 
 const props = withDefaults(
   defineProps<{

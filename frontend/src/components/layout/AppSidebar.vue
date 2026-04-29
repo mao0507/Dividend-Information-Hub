@@ -47,7 +47,7 @@
               :class="isActive ? 'text-accent' : 'text-content-faint'"
             />
             <span class="flex-1">{{ item.label }}</span>
-            <UBadge v-if="item.badge">{{ item.badge }}</UBadge>
+            <Badge v-if="item.badge" :value="item.badge" />
           </div>
         </RouterLink>
       </div>
@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import UBadge from '@/components/ui/UBadge.vue'
+import Badge from 'primevue/badge'
 import ThemedIcon from '@/components/icons/ThemedIcon.vue'
 import type { ThemedIconName } from '@/components/icons/ThemedIcon.vue'
 

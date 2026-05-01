@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MARKET_SYNC_KEY_DIVIDEND_HISTORY_BACKFILL } from './twse-sync.constants';
+import { inferFreq } from './twse-announcement-sync.service';
 
 const TWSE_TWT49U =
   'https://www.twse.com.tw/rwd/zh/exRight/TWT49U';
@@ -118,6 +119,8 @@ export class DividendHistoryBackfillService {
     this.status.running = false;
     this.status.currentYear = null;
     this.logger.log('DividendHistoryBackfill: 全部年份完成');
+
+    await this.batchFixFreq();
   };
 
   /**
@@ -209,7 +212,7 @@ export class DividendHistoryBackfillService {
           stockCode,
           year: exDate.getUTCFullYear(),
           period,
-          freq: 'annual',
+          freq: inferFreq(period),
           cash,
           exDate,
           ...(preExClose !== null ? { preExClose } : {}),
@@ -217,5 +220,30 @@ export class DividendHistoryBackfillService {
       });
     }
     return 1;
+  };
+
+  /**
+   * 批次修正 Dividend 資料表的 freq 欄位
+   * 依每支股票每年配息次數重新推算 freq
+   */
+  readonly batchFixFreq = async (): Promise<void> => {
+    this.logger.log('batchFixFreq: 開始批次修正 freq')
+
+    const grouped = await this.prisma.dividend.groupBy({
+      by: ['stockCode', 'year'],
+      _count: { id: true },
+    })
+
+    let updated = 0
+    for (const { stockCode, year, _count } of grouped) {
+      const freq = inferFreq(_count.id)
+      await this.prisma.dividend.updateMany({
+        where: { stockCode, year },
+        data: { freq },
+      })
+      updated++
+    }
+
+    this.logger.log(`batchFixFreq: 完成，修正 ${updated} 組 (stockCode, year)`)
   };
 }

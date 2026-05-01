@@ -181,6 +181,42 @@ describe('StockService.getPrices', () => {
     expect(result.diagnostics.fallbackAttempted).toBe(true)
     delete process.env.STOCK_PRICE_DB_FALLBACK_ENABLED
   })
+
+  it('returns TAIEX candle via parseTwseMiIndexTaiex when code is TAIEX and DB is empty', async () => {
+    process.env.STOCK_PRICE_DB_FALLBACK_ENABLED = 'true'
+    mockPrisma.stockPrice.findMany.mockResolvedValue([])
+    mockPriceSync.fetchTwseMiIndexWithRetry.mockResolvedValue({
+      stat: 'OK',
+      tables: [
+        {
+          fields: ['指數', '收盤指數'],
+          data: [['發行量加權股價指數', '20,000.00']],
+        },
+      ],
+    })
+
+    const result = await service.getPriceSeries('TAIEX', '6M')
+
+    expect(mockPriceSync.fetchTwseMiIndexWithRetry).toHaveBeenCalledTimes(1)
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].close).toBe(20000)
+    expect(result.data[0].open).toBe(20000)
+    expect(result.data[0].high).toBe(20000)
+    expect(result.data[0].low).toBe(20000)
+    expect(result.diagnostics.status).toBe('AVAILABLE')
+    delete process.env.STOCK_PRICE_DB_FALLBACK_ENABLED
+  })
+
+  it('returns empty array when TAIEX code is requested but parseTwseMiIndexTaiex returns null', async () => {
+    process.env.STOCK_PRICE_DB_FALLBACK_ENABLED = 'true'
+    mockPrisma.stockPrice.findMany.mockResolvedValue([])
+    mockPriceSync.fetchTwseMiIndexWithRetry.mockResolvedValue({ stat: 'NO_DATA', tables: [] })
+
+    const result = await service.getPriceSeries('TAIEX', '6M')
+
+    expect(result.data).toHaveLength(0)
+    delete process.env.STOCK_PRICE_DB_FALLBACK_ENABLED
+  })
 })
 
 describe('StockService.getTwseClosedDates', () => {

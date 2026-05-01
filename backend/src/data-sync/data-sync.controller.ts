@@ -1,8 +1,10 @@
 import {
   Controller,
+  Get,
   Post,
   HttpCode,
   HttpStatus,
+  BadRequestException,
   ConflictException,
   Headers,
   Body,
@@ -21,6 +23,7 @@ import { DividendHistoryBackfillService } from './dividend-history-backfill.serv
 import type { BackfillStatus } from './dividend-history-backfill.service';
 import { MarketUniverseSyncService } from './market-universe-sync.service';
 import { DividendFillTrackerService } from './dividend-fill-tracker.service';
+import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
 
 @Controller('data-sync')
 export class DataSyncController {
@@ -32,6 +35,7 @@ export class DataSyncController {
     private readonly dividendBackfill: DividendHistoryBackfillService,
     private readonly universeSync: MarketUniverseSyncService,
     private readonly fillTracker: DividendFillTrackerService,
+    private readonly announcementSync: TwseDividendAnnouncementSyncService,
   ) {}
 
   /**
@@ -163,5 +167,68 @@ export class DataSyncController {
   ) {
     this.assertDataSyncSecret(secret);
     return this.validator.validateOne(body.stockCode, body.date);
+  }
+
+  /**
+   * 查詢 DB 中 TAIEX 收盤資料筆數與日期範圍（需標頭 `x-data-sync-secret`）
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
+   * @returns count、earliest、latest（YYYY-MM-DD）
+   */
+  @Get('taiex-status')
+  async taiexStatus(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+  ): Promise<{ count: number; earliest: string | null; latest: string | null }> {
+    this.assertDataSyncSecret(secret);
+    return this.twseBackfill.getTaiexStatus();
+  }
+
+  /**
+   * 觸發 TAIEX 歷史收盤回填（需標頭 `x-data-sync-secret`）
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
+   * @param from 起始日 YYYY-MM-DD
+   * @param to 結束日 YYYY-MM-DD（最大範圍 730 天）
+   * @returns upserted、skipped、from、to
+   */
+  @Post('taiex-backfill')
+  @HttpCode(HttpStatus.OK)
+  async taiexBackfill(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ): Promise<{ upserted: number; skipped: number; from: string; to: string }> {
+    this.assertDataSyncSecret(secret);
+
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!datePattern.test(from) || isNaN(Date.parse(from)) ||
+        !datePattern.test(to)   || isNaN(Date.parse(to))) {
+      throw new BadRequestException('Invalid date format');
+    }
+
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    if (toMs < fromMs) throw new BadRequestException('Invalid date format');
+
+    const MAX_DAYS = 730;
+    const diffDays = Math.round((toMs - fromMs) / 86400000) + 1;
+    if (diffDays > MAX_DAYS) {
+      throw new BadRequestException('Date range must not exceed 730 days');
+    }
+
+    return this.twseBackfill.runTaiexBackfill(from, to);
+  }
+
+  /**
+   * 非同步同步未來 90 天已公告除息日（TWT48U）（需標頭 `x-data-sync-secret`）
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
+   * @returns 啟動確認
+   */
+  @Post('sync-dividend-announcements')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async syncDividendAnnouncements(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+  ): Promise<{ message: string; lookAheadDays: number }> {
+    this.assertDataSyncSecret(secret);
+    void this.announcementSync.sync();
+    return { message: 'Announcement sync started', lookAheadDays: 90 };
   }
 }

@@ -33,6 +33,8 @@ describe('DividendHistoryBackfillService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         update: jest.fn(),
         create: jest.fn(),
+        groupBy: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn(),
       },
       marketSyncState: {
         findUnique: jest.fn().mockResolvedValue(null),

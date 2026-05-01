@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { TwseDividendAnnouncementSyncService, inferFreq } from './twse-announcement-sync.service';
 
 const TWSE_TWT49U = 'https://www.twse.com.tw/rwd/zh/exRight/TWT49U';
 const UA = 'Mozilla/5.0 (compatible; DividendHub/1.0) DividendSync';
@@ -51,6 +52,7 @@ export class DividendSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly announcementSync: TwseDividendAnnouncementSyncService,
   ) {}
 
   /**
@@ -86,6 +88,10 @@ export class DividendSyncService {
 
       const total = await this.upsertRows(raw.data, trackedCodes);
       this.logger.log(`DividendSync: 完成，upsert ${total} 筆`);
+
+      // 同步未來已公告除息日（TWT48U）
+      await this.announcementSync.sync();
+
       return { total, failed: [] };
     } catch (err) {
       this.logger.error(`DividendSync: TWT49U 失敗 — ${err}`);
@@ -154,7 +160,7 @@ export class DividendSyncService {
               stockCode: code,
               year: exDate.getUTCFullYear(),
               period,
-              freq: 'annual',
+              freq: inferFreq(period),
               cash,
               exDate,
               ...(preExClose !== null ? { preExClose } : {}),

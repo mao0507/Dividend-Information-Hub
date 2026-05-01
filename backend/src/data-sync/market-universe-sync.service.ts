@@ -170,6 +170,7 @@ export class MarketUniverseSyncService {
       where: {
         isActive: true,
         code: { notIn: [...allCodes] },
+        market: { in: ['TWSE', 'TPEX'] },
       },
       data: { isActive: false },
     });

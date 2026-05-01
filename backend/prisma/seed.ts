@@ -107,6 +107,7 @@ const DEV_PRICE_SEEDS: Record<string, number> = {
   '0050': 168.5,
   '2412': 110.5,
   '2882': 68.3,
+  'TAIEX': 21000,
 };
 
 const main = async (): Promise<void> => {
@@ -152,6 +153,21 @@ const main = async (): Promise<void> => {
     if (tpexCount % 250 === 0) console.log(`   …TPEx 已 upsert ${tpexCount} 檔`);
   }
   console.log(`✅ TPEx Stocks: ${tpexCount} 檔`);
+
+  // 指數虛擬股票（TAIEX）
+  await prisma.stock.upsert({
+    where: { code: 'TAIEX' },
+    update: { name: '台灣加權指數', isActive: true },
+    create: {
+      code: 'TAIEX',
+      name: '台灣加權指數',
+      sector: '指數',
+      market: 'INDEX',
+      isEtf: false,
+      isActive: true,
+    },
+  });
+  console.log('✅ Stock: TAIEX (台灣加權指數)');
 
   // 測試使用者
   const passwordHash = await bcrypt.hash('password123', 12);

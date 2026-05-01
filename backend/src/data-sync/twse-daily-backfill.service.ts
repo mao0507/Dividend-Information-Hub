@@ -142,4 +142,60 @@ export class TwseDailyBackfillService {
 
     return { daysProcessed, totalRows, failedDates };
   };
+
+  /**
+   * 查詢 DB 中 TAIEX 收盤資料的筆數與日期範圍
+   * @returns count、earliest（YYYY-MM-DD）、latest（YYYY-MM-DD）
+   */
+  readonly getTaiexStatus = async (): Promise<{
+    count: number;
+    earliest: string | null;
+    latest: string | null;
+  }> => {
+    const [count, agg] = await Promise.all([
+      this.prisma.stockPrice.count({ where: { stockCode: 'TAIEX' } }),
+      this.prisma.stockPrice.aggregate({
+        where: { stockCode: 'TAIEX' },
+        _min: { date: true },
+        _max: { date: true },
+      }),
+    ]);
+    return {
+      count,
+      earliest: agg._min.date ? utcYmd(agg._min.date) : null,
+      latest: agg._max.date ? utcYmd(agg._max.date) : null,
+    };
+  };
+
+  /**
+   * 逐日呼叫 syncDate 回填 TAIEX 歷史收盤點（含所有 trackedCodes）
+   * @param from 起始日 YYYY-MM-DD
+   * @param to 結束日 YYYY-MM-DD
+   * @returns upserted（有資料的天數）、skipped（休市或失敗天數）
+   */
+  readonly runTaiexBackfill = async (
+    from: string,
+    to: string,
+  ): Promise<{ upserted: number; skipped: number; from: string; to: string }> => {
+    const days = enumerateInclusiveYmd(from, to);
+    let upserted = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < days.length; i++) {
+      const dayRef = days[i];
+      try {
+        const rows = await this.priceSync.syncDate(dayRef);
+        if (rows > 0) {
+          upserted += 1;
+        } else {
+          skipped += 1;
+        }
+      } catch {
+        skipped += 1;
+      }
+      if (i < days.length - 1) await sleep(BETWEEN_DAYS_DELAY_MS);
+    }
+
+    return { upserted, skipped, from, to };
+  };
 }

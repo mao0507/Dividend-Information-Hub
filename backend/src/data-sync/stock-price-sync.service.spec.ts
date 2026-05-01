@@ -1,5 +1,6 @@
 ﻿import {
   parseTwseMiIndexQuotes,
+  parseTwseMiIndexTaiex,
   StockPriceSyncService,
 } from './stock-price-sync.service';
 
@@ -7,6 +8,19 @@ const mockPrisma = {
   stock: { findMany: jest.fn() },
   stockPrice: { upsert: jest.fn(), deleteMany: jest.fn() },
 } as any;
+
+const makeIndexResponse = (closeStr: string) => ({
+  stat: 'OK',
+  tables: [
+    {
+      fields: ['指數', '收盤指數', '漲跌點數', '漲跌百分比', '說明'],
+      data: [
+        ['發行量加權股價指數', closeStr, '69.27', '-0.30', ''],
+        ['未含金融保險股指數', '20,000.00', '50.00', '-0.25', ''],
+      ],
+    },
+  ],
+});
 
 const makeMiResponse = (data: string[][]) => ({
   stat: 'OK',
@@ -26,6 +40,42 @@ const makeMiResponse = (data: string[][]) => ({
       data,
     },
   ],
+});
+
+describe('parseTwseMiIndexTaiex', () => {
+  it('extracts TAIEX close from index table', () => {
+    const result = parseTwseMiIndexTaiex(makeIndexResponse('23,011.86') as any);
+    expect(result).toBe(23011.86);
+  });
+
+  it('returns null when stat is not OK', () => {
+    const result = parseTwseMiIndexTaiex({ stat: 'FAIL', tables: [] } as any);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no index table present', () => {
+    const result = parseTwseMiIndexTaiex({ stat: 'OK', tables: [] } as any);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when TAIEX row is missing', () => {
+    const raw = {
+      stat: 'OK',
+      tables: [
+        {
+          fields: ['指數', '收盤指數'],
+          data: [['未含金融保險股指數', '20,000.00']],
+        },
+      ],
+    };
+    const result = parseTwseMiIndexTaiex(raw as any);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when close is unparseable', () => {
+    const result = parseTwseMiIndexTaiex(makeIndexResponse('--') as any);
+    expect(result).toBeNull();
+  });
 });
 
 describe('parseTwseMiIndexQuotes', () => {
@@ -169,5 +219,40 @@ describe('StockPriceSyncService', () => {
       );
       expect(global.fetch).toHaveBeenCalledTimes(3);
     }, 15000);
+
+    it('upserts TAIEX when TAIEX is in tracked codes', async () => {
+      mockPrisma.stock.findMany.mockResolvedValue([{ code: 'TAIEX' }]);
+      mockPrisma.stockPrice.upsert.mockResolvedValue({});
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          stat: 'OK',
+          tables: [
+            {
+              fields: ['指數', '收盤指數', '漲跌點數', '漲跌百分比', '說明'],
+              data: [['發行量加權股價指數', '21,500.00', '100.00', '0.47', '']],
+            },
+            {
+              fields: [
+                '證券代號', '證券名稱', '成交股數', '成交筆數',
+                '成交金額', '開盤價', '最高價', '最低價', '收盤價',
+              ],
+              data: [
+                ['2330', '台積電', '1,000', '10', '2,000,000', '750', '760', '745', '755'],
+              ],
+            },
+          ],
+        }),
+      });
+
+      const result = await service.syncDate(new Date('2024-04-15'));
+      expect(result).toBe(1);
+      const call = mockPrisma.stockPrice.upsert.mock.calls[0][0];
+      expect(call.where.stockCode_date.stockCode).toBe('TAIEX');
+      expect(call.create.close).toBe(21500);
+      expect(call.create.open).toBe(21500);
+      expect(call.create.volume).toBe(0n);
+    });
   });
 });

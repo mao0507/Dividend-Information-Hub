@@ -1,4 +1,5 @@
 ﻿import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   UnauthorizedException,
@@ -12,6 +13,8 @@ const mockScheduler = {
 
 const mockTwseBackfill = {
   runBackfill: jest.fn(),
+  getTaiexStatus: jest.fn(),
+  runTaiexBackfill: jest.fn(),
 };
 
 const mockValidator = {
@@ -124,6 +127,61 @@ describe('DataSyncController', () => {
           toDate: '2024-01-10',
           resume: false,
         }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('taiexStatus', () => {
+    it('returns TAIEX DB stats when secret matches', async () => {
+      mockTwseBackfill.getTaiexStatus.mockResolvedValue({
+        count: 120,
+        earliest: '2024-01-02',
+        latest: '2024-06-28',
+      });
+
+      const result = await controller.taiexStatus('test-secret');
+
+      expect(mockTwseBackfill.getTaiexStatus).toHaveBeenCalledTimes(1);
+      expect(result.count).toBe(120);
+      expect(result.earliest).toBe('2024-01-02');
+    });
+
+    it('throws UnauthorizedException when secret mismatches', async () => {
+      await expect(controller.taiexStatus('wrong')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('taiexBackfill', () => {
+    it('returns upserted and skipped when date range is valid', async () => {
+      mockTwseBackfill.runTaiexBackfill.mockResolvedValue({
+        upserted: 5,
+        skipped: 2,
+        from: '2024-01-02',
+        to: '2024-01-08',
+      });
+
+      const result = await controller.taiexBackfill('test-secret', '2024-01-02', '2024-01-08');
+
+      expect(mockTwseBackfill.runTaiexBackfill).toHaveBeenCalledWith('2024-01-02', '2024-01-08');
+      expect(result.upserted).toBe(5);
+      expect(result.skipped).toBe(2);
+    });
+
+    it('throws BadRequestException when date format is invalid', async () => {
+      await expect(
+        controller.taiexBackfill('test-secret', 'invalid', '2024-01-08'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when range exceeds 730 days', async () => {
+      await expect(
+        controller.taiexBackfill('test-secret', '2022-01-01', '2024-06-30'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws UnauthorizedException when secret mismatches', async () => {
+      await expect(
+        controller.taiexBackfill('wrong', '2024-01-01', '2024-01-07'),
       ).rejects.toThrow(UnauthorizedException);
     });
   });

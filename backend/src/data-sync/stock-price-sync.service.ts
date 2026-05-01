@@ -77,6 +77,36 @@ const parseVolumeOrZero = (raw: string | undefined): bigint => {
 };
 
 /**
+ * 由 MI_INDEX 回應的「價格指數」table 抽取發行量加權股價指數收盤值。
+ * @param raw TWSE MI_INDEX 回應
+ * @returns 加權指數收盤點數，無資料或格式異常時回傳 null
+ */
+export const parseTwseMiIndexTaiex = (
+  raw: TwseMiIndexResponse,
+): number | null => {
+  if (raw.stat !== 'OK' || !Array.isArray(raw.tables)) return null;
+
+  const indexTable = raw.tables.find((t) => {
+    const fields = t.fields ?? [];
+    return fields.includes('指數') && fields.includes('收盤指數');
+  });
+  if (!indexTable?.data?.length) return null;
+
+  const fields = indexTable.fields ?? [];
+  const idxName = fields.indexOf('指數');
+  const idxClose = fields.indexOf('收盤指數');
+  if (idxName < 0 || idxClose < 0) return null;
+
+  const taiexRow = indexTable.data.find(
+    (row) => String(row[idxName] ?? '').trim() === '發行量加權股價指數',
+  );
+  if (!taiexRow) return null;
+
+  const close = parseNumberOrZero(taiexRow[idxClose]);
+  return close > 0 ? close : null;
+};
+
+/**
  * 由 MI_INDEX 回應中抽取「每日收盤行情(全部(不含權證、牛熊證))」資料列
  * @param raw TWSE MI_INDEX 回應
  * @returns 可供寫入 DB 的日行情陣列
@@ -251,6 +281,36 @@ export class StockPriceSyncService {
         upserted++;
       } catch (err) {
         this.logger.warn(`StockPrice upsert failed for ${q.code}: ${err}`);
+      }
+    }
+
+    if (trackedCodes.has('TAIEX')) {
+      const taiexClose = parseTwseMiIndexTaiex(raw);
+      if (taiexClose !== null) {
+        try {
+          await this.prisma.stockPrice.upsert({
+            where: { stockCode_date: { stockCode: 'TAIEX', date: dateOnly } },
+            create: {
+              stockCode: 'TAIEX',
+              date: dateOnly,
+              open: taiexClose,
+              high: taiexClose,
+              low: taiexClose,
+              close: taiexClose,
+              volume: 0n,
+            },
+            update: {
+              open: taiexClose,
+              high: taiexClose,
+              low: taiexClose,
+              close: taiexClose,
+              volume: 0n,
+            },
+          });
+          upserted++;
+        } catch (err) {
+          this.logger.warn(`StockPrice upsert failed for TAIEX: ${err}`);
+        }
       }
     }
 

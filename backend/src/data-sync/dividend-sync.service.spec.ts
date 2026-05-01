@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DividendSyncService } from './dividend-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
 
 /**
  * 建立 TWT49U 回應列
@@ -44,6 +45,10 @@ describe('DividendSyncService', () => {
         DividendSyncService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: TwseDividendAnnouncementSyncService,
+          useValue: { sync: jest.fn().mockResolvedValue(0) },
+        },
       ],
     }).compile();
 

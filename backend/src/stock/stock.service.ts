@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { MARKET_SYNC_KEY_TWSE_STOCK_PRICE_BACKFILL } from '../data-sync/twse-sync.constants'
-import { parseTwseMiIndexQuotes, StockPriceSyncService } from '../data-sync/stock-price-sync.service'
+import { parseTwseMiIndexQuotes, parseTwseMiIndexTaiex, StockPriceSyncService } from '../data-sync/stock-price-sync.service'
 import { formatUtcYmd, parseYmdUtcNoon } from '../data-sync/stock-date.util'
 import { CreateHoldingLotDto } from './dto/create-holding-lot.dto'
 
@@ -365,11 +365,18 @@ export class StockService {
    */
   private readonly querySourceFallbackRows = async (code: string, since: Date): Promise<PriceRow[]> => {
     const raw = await this.priceSync.fetchTwseMiIndexWithRetry(new Date())
-    const quote = parseTwseMiIndexQuotes(raw).find((item) => item.code === code)
-    if (!quote) return []
     const todayYmd = formatUtcYmd(new Date())
     const todayDate = parseYmdUtcNoon(todayYmd)
     if (todayDate < since) return []
+
+    if (code === 'TAIEX') {
+      const close = parseTwseMiIndexTaiex(raw)
+      if (close === null) return []
+      return [{ date: todayDate, open: close, high: close, low: close, close, volume: 0 }]
+    }
+
+    const quote = parseTwseMiIndexQuotes(raw).find((item) => item.code === code)
+    if (!quote) return []
     return [{
       date: todayDate,
       open: quote.open,

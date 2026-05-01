@@ -84,7 +84,7 @@ const fullName = computed<string>(() => `${first.value} ${last.value}`)
 
 ## Vue Template HTML 風格
 
-### 無內容標籤一律自閉合
+### 無內容的標籤一律使用自閉合語法
 
 ```html
 <!-- ❌ 禁止 -->
@@ -98,12 +98,13 @@ const fullName = computed<string>(() => `${first.value} ${last.value}`)
 <img src="..." />
 ```
 
-> 無子節點（文字、元素、插值）= 無內容 → 自閉合。
+> 無子節點（文字、元素、插值）= 無內容，須自閉合。
 
 ---
 
 ## 套用範圍
 
+規則適用：
 - `frontend/src/**/*.ts`
 - `frontend/src/**/*.vue`（`<script setup>` 區塊）
 - `backend/src/**/*.ts`

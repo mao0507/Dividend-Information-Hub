@@ -11,6 +11,7 @@ const defaults: TweakSettings = {
   monoFont: 'JetBrains Mono',
   sansFont: 'Inter',
   radius: 10,
+  showVolume: true,
 }
 
 function applyToDOM(t: TweakSettings) {

@@ -232,6 +232,7 @@ export interface TweakSettings {
   monoFont: string
   sansFont: string
   radius: number
+  showVolume: boolean
 }
 
 export interface UserSettings {

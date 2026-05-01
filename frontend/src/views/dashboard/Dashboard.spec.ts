@@ -8,7 +8,6 @@ const {
   getSummaryMock,
   getUpcomingMock,
   getAllMock,
-  getFeaturedMock,
   getPriceSeriesMock,
   getTwseClosedDatesMock,
 } = vi.hoisted(() => ({
@@ -16,7 +15,6 @@ const {
   getSummaryMock: vi.fn(),
   getUpcomingMock: vi.fn(),
   getAllMock: vi.fn(),
-  getFeaturedMock: vi.fn(),
   getPriceSeriesMock: vi.fn(),
   getTwseClosedDatesMock: vi.fn(),
 }))
@@ -44,7 +42,6 @@ vi.mock('@/services/api/watchlist', () => ({
 
 vi.mock('@/services/api/stock', () => ({
   stockApi: {
-    getFeatured: getFeaturedMock,
     getPriceSeries: getPriceSeriesMock,
     getTwseClosedDates: getTwseClosedDatesMock,
   },
@@ -83,7 +80,6 @@ describe('DashboardPage range resilience', () => {
     getSummaryMock.mockReset()
     getUpcomingMock.mockReset()
     getAllMock.mockReset()
-    getFeaturedMock.mockReset()
     getPriceSeriesMock.mockReset()
     getTwseClosedDatesMock.mockReset()
 
@@ -104,40 +100,22 @@ describe('DashboardPage range resilience', () => {
     })
     getUpcomingMock.mockResolvedValue({ data: [] })
     getAllMock.mockResolvedValue({ data: [] })
-    getFeaturedMock.mockResolvedValue({
-      data: {
-        featured: {
-          code: '2330',
-          name: '台積電',
-          sector: '半導體',
-          market: 'TWSE',
-          isEtf: false,
-          price: 100,
-          change: 1,
-          changePct: 1,
-          volume: 100,
-          updatedAt: '2026-04-27T00:00:00.000Z',
-          streak: 1,
-          annualCash: 1,
-          yieldPct: 1,
-        },
-      },
-    })
     getTwseClosedDatesMock.mockResolvedValue([])
-    const rangePayloads: Record<string, { data: OhlcvPoint[]; reason: string }> = {
-      '6M': { data: [makeCandle('2026-04-25', 101)], reason: '資料庫已有可用價格資料' },
-      '1W': { data: [makeCandle('2026-04-27', 102)], reason: '資料庫已有可用價格資料' },
-      '1M': { data: [], reason: '資料庫查無對應區間價格資料' },
-      '3M': { data: [makeCandle('2026-03-01', 99)], reason: '資料庫已有可用價格資料' },
-      '1Y': { data: [], reason: '查詢區間晚於最近同步交易日，請待排程完成' },
-      'MAX': { data: [makeCandle('2025-01-02', 88)], reason: '資料庫已有可用價格資料' },
+
+    const rangePayloads: Record<string, OhlcvPoint[]> = {
+      '6M': [makeCandle('2026-04-25', 21000), makeCandle('2026-04-24', 20900)],
+      '1W': [makeCandle('2026-04-27', 21200), makeCandle('2026-04-26', 21100)],
+      '1M': [],
+      '3M': [makeCandle('2026-03-01', 20500), makeCandle('2026-02-28', 20400)],
+      '1Y': [],
+      'MAX': [makeCandle('2025-01-02', 18000), makeCandle('2024-12-31', 17900)],
     }
     getPriceSeriesMock.mockImplementation(async (_code: string, range: string) => ({
       data: {
-        data: rangePayloads[range]?.data ?? [],
+        data: rangePayloads[range] ?? [],
         diagnostics: {
-          status: rangePayloads[range]?.data.length ? 'AVAILABLE' : 'MISSING_IN_DB',
-          reason: rangePayloads[range]?.reason ?? '資料庫查無對應區間價格資料',
+          status: (rangePayloads[range]?.length ?? 0) > 0 ? 'AVAILABLE' : 'MISSING_IN_DB',
+          reason: '資料庫已有可用價格資料',
           fallbackAttempted: false,
           lastSyncedTradingDate: '2026-04-25',
           syncUpdatedAt: '2026-04-25T15:00:00.000Z',
@@ -168,12 +146,28 @@ describe('DashboardPage range resilience', () => {
       expect(wrapper.find('[data-test="tvchart"]').exists()).toBe(true)
     }
 
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', '1W')
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', '1M')
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', '3M')
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', '6M')
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', '1Y')
-    expect(getPriceSeriesMock).toHaveBeenCalledWith('2330', 'MAX')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', '1W')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', '1M')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', '3M')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', '6M')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', '1Y')
+    expect(getPriceSeriesMock).toHaveBeenCalledWith('TAIEX', 'MAX')
+  })
+
+  it('shows TAIEX header label', async () => {
+    const wrapper = mount(DashboardPage, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TvChart: tvChartStub,
+          SparkLine: { template: '<div />' },
+          Chip: { template: '<span><slot /></span>' },
+        },
+      },
+    })
+    await flushAll()
+    expect(wrapper.text()).toContain('台灣加權指數')
+    expect(wrapper.text()).toContain('TAIEX')
   })
 
   it('renders accumulated income and total invested amount in one combined card', async () => {

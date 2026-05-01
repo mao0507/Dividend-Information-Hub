@@ -72,4 +72,70 @@ export const primevuePT = {
       class: 'inline-flex items-center justify-center font-mono text-[10px] font-semibold px-[5px] py-[1px] rounded-[3px] bg-accent/15 text-accent leading-none',
     },
   },
+  dialog: {
+    root: {
+      style: { borderRadius: '20px', overflow: 'hidden' },
+    },
+    mask: {
+      style: {
+        position: 'fixed', inset: '0', zIndex: '50',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      },
+    },
+    container: {
+      style: {
+        position: 'relative',
+        background: '#101013',
+        border: '1px solid rgba(255,255,255,0.14)',
+        borderRadius: '20px',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)',
+        width: '100%',
+        maxHeight: '90vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      },
+    },
+    header: {
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 20px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: '#101013',
+        flexShrink: '0',
+      },
+    },
+    title: {
+      style: {
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: '13px', fontWeight: '600',
+        color: '#e8e8ea', letterSpacing: '0.025em',
+      },
+    },
+    headerActions: {
+      style: { display: 'flex', alignItems: 'center', marginLeft: '8px' },
+    },
+    closeButton: {
+      style: {
+        width: '24px', height: '24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: '6px', cursor: 'pointer',
+        color: 'rgba(255,255,255,0.38)',
+        background: 'transparent', border: 'none',
+        transition: 'color 0.15s, background 0.15s',
+      },
+    },
+    closeIcon: {
+      style: { width: '12px', height: '12px' },
+    },
+    content: {
+      style: {
+        padding: '16px 20px 20px',
+        overflowY: 'auto',
+        color: '#e8e8ea',
+        background: '#101013',
+      },
+    },
+  },
 }

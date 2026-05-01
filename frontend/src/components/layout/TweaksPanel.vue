@@ -44,6 +44,19 @@
           </div>
         </div>
 
+        <!-- Chart -->
+        <div>
+          <div class="text-[11px] text-content-faint mb-2">圖表</div>
+          <div class="flex gap-2">
+            <button
+              v-for="opt in [{ v: true, l: '顯示成交量' }, { v: false, l: '隱藏成交量' }]"
+              :key="String(opt.v)"
+              :class="['px-2.5 py-1 text-[10px] rounded-full border transition-colors font-mono', tweaks.settings.showVolume === opt.v ? 'border-accent text-accent' : 'border-border text-content-soft']"
+              @click="tweaks.setTweak('showVolume', opt.v)"
+            >{{ opt.l }}</button>
+          </div>
+        </div>
+
         <!-- Density -->
         <div>
           <div class="text-[11px] text-content-faint mb-2">介面密度</div>

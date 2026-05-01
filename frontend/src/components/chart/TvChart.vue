@@ -24,7 +24,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { createChart } from 'lightweight-charts'
-import type { IChartApi, ISeriesApi, CandlestickData, HistogramData, SeriesMarker, Time } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, CandlestickData, LineData, HistogramData, SeriesMarker, Time } from 'lightweight-charts'
 import { useTweaksStore } from '@/stores/tweaks'
 import type { OhlcvPoint } from '@/types'
 import { normalizeChartData, toChartDayKey } from '@/utils/chartData'
@@ -36,20 +36,30 @@ const props = withDefaults(defineProps<{
   height?: number
   /** 外部資料載入中（避免與「空資料」混淆） */
   loading?: boolean
+  /** 以折線圖模式顯示（僅用收盤價，適合指數等無完整 OHLC 的資料） */
+  lineMode?: boolean
+  /** 強制覆蓋成交量顯示設定；未傳入時沿用 tweaks store */
+  showVolume?: boolean
 }>(), {
   candles: () => [],
   twseClosedDates: () => [],
   exDates: () => [],
   height: 320,
   loading: false,
+  lineMode: false,
+  showVolume: undefined,
 })
 
 const tweaksStore = useTweaksStore()
+
+const effectiveShowVolume = computed<boolean>(() =>
+  props.showVolume !== undefined ? props.showVolume : tweaksStore.settings.showVolume,
+)
 const containerRef = ref<HTMLDivElement>()
 const chartRef = ref<HTMLDivElement>()
 
 let chart: IChartApi | null = null
-let candleSeries: ISeriesApi<'Candlestick'> | null = null
+let candleSeries: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null = null
 let volSeries: ISeriesApi<'Histogram'> | null = null
 let ro: ResizeObserver | null = null
 
@@ -195,14 +205,20 @@ const refreshSeriesData = (): void => {
   if (!candleSeries || !volSeries) return
 
   const candles = seriesCandles.value
-  const candleData: CandlestickData[] = candles.map((c) => ({
-    time: c.date as Time,
-    open: c.open,
-    high: c.high,
-    low: c.low,
-    close: c.close,
-  }))
-  candleSeries.setData(candleData)
+
+  if (props.lineMode) {
+    const lineData: LineData[] = candles.map((c) => ({ time: c.date as Time, value: c.close }))
+    ;(candleSeries as ISeriesApi<'Line'>).setData(lineData)
+  } else {
+    const candleData: CandlestickData[] = candles.map((c) => ({
+      time: c.date as Time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }))
+    ;(candleSeries as ISeriesApi<'Candlestick'>).setData(candleData)
+  }
 
   const volData: HistogramData[] = candles.map((c) => ({
     time: c.date as Time,
@@ -218,7 +234,7 @@ const refreshSeriesData = (): void => {
  * 更新 K 線燭台顏色（跟隨 tweaks.upRed）
  */
 const refreshCandleColors = (): void => {
-  if (!candleSeries || !volSeries) return
+  if (!candleSeries || !volSeries || props.lineMode) return
 
   candleSeries.applyOptions({
     upColor: upColor.value,
@@ -253,14 +269,18 @@ const initChart = (): void => {
 
   applyTheme()
 
-  candleSeries = chart.addCandlestickSeries({
-    upColor: upColor.value,
-    downColor: downColor.value,
-    borderUpColor: upColor.value,
-    borderDownColor: downColor.value,
-    wickUpColor: upColor.value,
-    wickDownColor: downColor.value,
-  })
+  if (props.lineMode) {
+    candleSeries = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
+  } else {
+    candleSeries = chart.addCandlestickSeries({
+      upColor: upColor.value,
+      downColor: downColor.value,
+      borderUpColor: upColor.value,
+      borderDownColor: downColor.value,
+      wickUpColor: upColor.value,
+      wickDownColor: downColor.value,
+    })
+  }
 
   chart.priceScale('right').applyOptions({
     scaleMargins: { top: 0.05, bottom: 0.25 },
@@ -273,6 +293,7 @@ const initChart = (): void => {
 
   refreshSeriesData()
   applyExDateMarkers()
+  applyVolumeVisibility(effectiveShowVolume.value)
 }
 
 /**
@@ -323,5 +344,18 @@ watch(seriesCandles, () => {
 
 watch(() => props.exDates, applyExDateMarkers)
 
+/**
+ * 顯示或隱藏成交量子圖，並調整 K 線價格軸下緣空白。
+ * @param show 是否顯示成交量
+ */
+const applyVolumeVisibility = (show: boolean): void => {
+  if (!chart || !volSeries) return
+  volSeries.applyOptions({ visible: show })
+  chart.priceScale('right').applyOptions({
+    scaleMargins: { top: 0.05, bottom: show ? 0.25 : 0.05 },
+  })
+}
+
 watch([() => tweaksStore.settings.upRed, () => tweaksStore.settings.accent], refreshCandleColors)
+watch(effectiveShowVolume, applyVolumeVisibility)
 </script>

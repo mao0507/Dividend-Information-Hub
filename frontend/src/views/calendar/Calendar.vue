@@ -33,15 +33,17 @@
         <!-- 殖利率門檻 -->
         <div class="space-y-2">
           <div class="text-[10px] font-mono text-content-faint uppercase tracking-widest">
-            殖利率 ≥ {{ filters.yieldGt }}%
+            殖利率 ≥ {{ pendingYieldGt }}%
           </div>
           <input
-            v-model.number="filters.yieldGt"
             type="range"
+            :value="pendingYieldGt"
             min="0"
             max="15"
             step="0.5"
             class="w-full accent-[var(--accent)]"
+            @input="pendingYieldGt = Number(($event.target as HTMLInputElement).value)"
+            @change="filters.yieldGt = pendingYieldGt"
           />
         </div>
 
@@ -121,23 +123,23 @@
               <!-- 事件晶片 -->
               <template v-if="cell.events.length">
                 <div
-                  v-for="ev in cell.events.slice(0, 3)"
+                  v-for="ev in cell.events.slice(0, 2)"
                   :key="ev.id"
                   :class="[
-                    'flex items-center gap-1 px-1 py-0.5 rounded-[3px] text-[9px] font-mono truncate cursor-pointer',
+                    'flex items-center gap-1 px-1 py-0.5 rounded-[3px] text-[9px] font-mono min-w-0 cursor-pointer',
                     ev.isWatchlist ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-3 text-content-soft',
                   ]"
                   :style="{ borderLeft: `2px solid ${eventColor(ev)}` }"
                   @click="selectedEvent = ev"
                 >
-                  <span class="truncate">{{ ev.stockCode }} {{ ev.stockName }}</span>
-                  <span class="shrink-0 text-accent">{{ ev.amount.toFixed(1) }}</span>
+                  <span class="flex-1 truncate">{{ ev.stockCode }} {{ ev.stockName }}</span>
+                  <span class="ml-1 text-accent">{{ amountLabel(ev) }}</span>
                 </div>
-                <div
-                  v-if="cell.events.length > 3"
-                  class="font-mono text-[9px] text-content-faint px-1 cursor-pointer hover:text-content"
-                  @click="expandedCell = cell.key"
-                >+{{ cell.events.length - 3 }} 更多</div>
+                <button
+                  v-if="cell.events.length > 2"
+                  class="font-mono text-[9px] text-accent px-1 hover:underline text-left"
+                  @click.stop="overflowDialogDate = cell.key"
+                >+{{ cell.events.length - 2 }} 更多</button>
               </template>
             </div>
           </div>
@@ -154,6 +156,40 @@
       </div>
     </div>
 
+    <!-- 溢出除息清單 Dialog -->
+    <Dialog
+      v-model:visible="overflowDialogVisible"
+      :header="overflowDialogTitle"
+      modal
+      :style="{ width: '420px', minWidth: '360px' }"
+    >
+      <table class="w-full text-[12px]">
+        <thead>
+          <tr class="border-b border-border text-content-faint text-[10px] uppercase tracking-widest">
+            <th class="py-1.5 text-left font-normal w-[60px]">代號</th>
+            <th class="py-1.5 text-left font-normal">名稱</th>
+            <th class="py-1.5 text-left font-normal w-[60px]">頻率</th>
+            <th class="py-1.5 text-right font-normal">除息金額</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          <tr
+            v-for="ev in overflowDialogEvents"
+            :key="ev.id"
+            class="hover:bg-surface-3 transition-colors cursor-pointer"
+            @click="overflowDialogDate = null; router.push(`/stock/${ev.stockCode}`)"
+          >
+            <td class="py-1.5 text-content-soft">{{ ev.stockCode }}</td>
+            <td class="py-1.5 text-content truncate max-w-[160px]">{{ ev.stockName }}</td>
+            <td class="py-1.5 text-content-faint">{{ FREQ_OPTIONS.find(f => f.value === ev.freq)?.label ?? ev.freq }}</td>
+            <td class="py-1.5 text-right font-semibold" :class="ev.amount > 0 ? 'text-accent' : 'text-content-faint'">
+              {{ ev.amount > 0 ? `${ev.amount.toFixed(2)} 元` : '尚未公布' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </Dialog>
+
     <!-- 事件詳情浮層 -->
     <Transition name="fade">
       <div
@@ -162,32 +198,51 @@
         @click.self="selectedEvent = null"
       >
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-        <div class="relative bg-surface-2 border border-border-strong rounded-[14px] p-5 w-[320px] space-y-4 shadow-2xl">
-          <div class="flex items-start justify-between">
+        <div class="relative w-[360px] overflow-hidden shadow-2xl" style="background:#101013; border:1px solid rgba(255,255,255,0.14); border-radius:20px">
+          <!-- 頂部色條 -->
+          <div class="h-[3px] w-full" style="background: linear-gradient(90deg, var(--accent,#22c55e) 0%, rgba(34,197,94,0.2) 100%)" />
+
+          <!-- 股票標題 -->
+          <div class="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-mono text-[10px] text-content-faint tracking-widest uppercase mb-0.5">{{ selectedEvent.stockCode }}</div>
+              <div class="text-[15px] font-semibold text-content leading-tight truncate">{{ selectedEvent.stockName }}</div>
+            </div>
+            <span class="shrink-0 font-mono text-[10px] font-medium px-2 py-0.5 rounded-[5px]" style="color:var(--accent,#22c55e); background:rgba(34,197,94,0.12)">
+              {{ FREQ_OPTIONS.find(f => f.value === selectedEvent.freq)?.label ?? selectedEvent.freq }}
+            </span>
+          </div>
+
+          <!-- 分隔 -->
+          <div class="mx-5" style="height:1px; background:rgba(255,255,255,0.06)" />
+
+          <!-- 數據列 -->
+          <div class="px-5 py-4 flex items-center justify-between gap-4">
             <div>
-              <div class="font-mono text-xs text-content-faint">{{ selectedEvent.stockCode }}</div>
-              <div class="text-base font-semibold text-content">{{ selectedEvent.stockName }}</div>
+              <div class="font-mono text-[9px] text-content-faint uppercase tracking-widest mb-1">配息金額</div>
+              <div class="font-mono text-[22px] font-semibold leading-none" style="color:var(--accent,#22c55e)">
+                {{ selectedEvent.amount > 0 ? selectedEvent.amount.toFixed(2) : '—' }}
+              </div>
+              <div v-if="selectedEvent.amount > 0" class="font-mono text-[10px] text-content-faint mt-0.5">元 / 股</div>
+              <div v-else class="font-mono text-[10px] text-content-faint mt-0.5">尚未公布</div>
             </div>
-            <Chip :pt="{ root: { style: { color: 'var(--accent)', background: 'rgba(34,197,94,0.12)' } } }">{{ selectedEvent.freq }}</Chip>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="bg-surface-3 rounded-[8px] p-3">
-              <div class="text-[10px] font-mono text-content-faint mb-1">配息金額</div>
-              <div class="font-mono text-lg font-semibold text-accent">{{ selectedEvent.amount.toFixed(2) }} 元</div>
-            </div>
-            <div class="bg-surface-3 rounded-[8px] p-3">
-              <div class="text-[10px] font-mono text-content-faint mb-1">除息日</div>
-              <div class="font-mono text-sm text-content">{{ fmtDate(selectedEvent.exDate) }}</div>
+            <div class="text-right">
+              <div class="font-mono text-[9px] text-content-faint uppercase tracking-widest mb-1">除息日</div>
+              <div class="font-mono text-[15px] font-semibold text-content">{{ fmtDate(selectedEvent.exDate) }}</div>
             </div>
           </div>
-          <div class="flex gap-2">
+
+          <!-- 操作按鈕 -->
+          <div class="px-4 pb-4 flex gap-2">
             <button
-              class="flex-1 py-2 text-[12px] font-mono bg-surface-3 rounded-[8px] text-content-soft hover:text-content transition-colors"
+              class="flex-1 py-2 text-[11px] font-mono rounded-[10px] transition-colors"
+              style="background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.5)"
               @click="selectedEvent = null"
             >關閉</button>
             <RouterLink
               :to="`/stock/${selectedEvent.stockCode}`"
-              class="flex-1 py-2 text-[12px] font-mono bg-accent/15 rounded-[8px] text-accent text-center hover:bg-accent/25 transition-colors"
+              class="flex-1 py-2 text-[11px] font-mono rounded-[10px] text-center transition-colors"
+              style="background:rgba(34,197,94,0.15); color:var(--accent,#22c55e)"
               @click="selectedEvent = null"
             >查看個股 →</RouterLink>
           </div>
@@ -199,10 +254,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Chip from 'primevue/chip'
+import Dialog from 'primevue/dialog'
 import { calendarApi } from '@/services/api/calendar'
 import type { CalendarEvent } from '@/types'
 
@@ -219,13 +275,25 @@ const LEGEND = [
   { label: '自選股', color: '#3b82f6' },
 ]
 
+const router = useRouter()
 const today = new Date()
 const year = ref<number>(today.getFullYear())
 const month = ref<number>(today.getMonth() + 1)
 const events = ref<CalendarEvent[]>([])
 const loading = ref<boolean>(false)
 const selectedEvent = ref<CalendarEvent | null>(null)
-const expandedCell = ref<string | null>(null)
+const overflowDialogDate = ref<string | null>(null)
+
+/** Dialog visible binding（PrimeVue Dialog 需要 boolean） */
+const overflowDialogVisible = computed<boolean>({
+  get: () => overflowDialogDate.value !== null,
+  set: (v: boolean) => { if (!v) overflowDialogDate.value = null },
+})
+
+/** Dialog 標題：YYYY/MM/DD */
+const overflowDialogTitle = computed<string>(() =>
+  overflowDialogDate.value ? overflowDialogDate.value.replace(/-/g, '/') : '',
+)
 
 const filters = ref<{
   watchlistOnly: boolean
@@ -236,6 +304,9 @@ const filters = ref<{
   freq: '',
   yieldGt: 0,
 })
+
+/** 殖利率 slider 即時顯示值；滑鼠放開後才寫入 filters.yieldGt 觸發請求 */
+const pendingYieldGt = ref<number>(0)
 
 /**
  * 決定事件的左側邊框顏色
@@ -249,13 +320,22 @@ const eventColor = (ev: CalendarEvent): string => {
 }
 
 /**
- * 格式化日期為 MM/DD
- * @param d 日期字串或 null
+ * 格式化配息金額為晶片標籤；零值（待公告）顯示「尚未公布」。
+ * @param ev 行事曆事件
+ * @returns 金額字串（如 $1.2）或「尚未公布」
+ */
+const amountLabel = (ev: CalendarEvent): string =>
+  ev.amount > 0 ? `$${ev.amount.toFixed(2)}` : '尚未公布'
+
+/**
+ * 格式化日期字串為 MM/DD，直接切割字串避免 Date 建構的 UTC 時差問題。
+ * @param d ISO 日期字串（YYYY-MM-DD 或 YYYY-MM-DDTHH:mm:ss.sssZ）或 null
+ * @returns MM/DD 格式字串
  */
 const fmtDate = (d: string | null | undefined): string => {
   if (!d) return '—'
-  const dt = new Date(d)
-  return `${dt.getMonth() + 1}/${dt.getDate()}`
+  const [, m, day] = d.slice(0, 10).split('-')
+  return `${Number(m)}/${Number(day)}`
 }
 
 /** 產生當月行事曆格子（含前後月份補位） */
@@ -292,21 +372,36 @@ const calendarCells = computed<{
   return cells
 })
 
+/** Dialog 表格事件清單 */
+const overflowDialogEvents = computed<CalendarEvent[]>(() =>
+  overflowDialogDate.value
+    ? (calendarCells.value.find((c) => c.key === overflowDialogDate.value)?.events ?? [])
+    : [],
+)
+
+/**
+ * 本地日期轉 YYYY-MM-DD 字串，避免 toISOString() 的 UTC 時差問題。
+ * @param d 本地日期
+ * @returns YYYY-MM-DD 格式字串
+ */
+const toLocalDateKey = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 /**
  * 建立單一格子資料
  * @param date 日期
  * @param currentMonth 是否屬於當月
  */
 const makeCell = (date: Date, currentMonth: boolean) => {
-  const key = date.toISOString().slice(0, 10)
+  const key = toLocalDateKey(date)
   const isToday =
     date.getFullYear() === today.getFullYear() &&
     date.getMonth() === today.getMonth() &&
     date.getDate() === today.getDate()
 
   const dayEvents = events.value.filter((ev) => {
-    const exDate = ev.exDate ? new Date(ev.exDate).toISOString().slice(0, 10) : null
-    const payDate = ev.payDate ? new Date(ev.payDate).toISOString().slice(0, 10) : null
+    const exDate = ev.exDate?.slice(0, 10) ?? null
+    const payDate = ev.payDate?.slice(0, 10) ?? null
     return exDate === key || payDate === key
   })
 
@@ -340,16 +435,23 @@ const stats = computed<{
   return { total: stockSet.size, watchlist: watchlistSet.size, payCount, busiestDay }
 })
 
-/** 載入行事曆資料 */
+/** 載入行事曆資料（同時載入下個月，供格子後補位顯示） */
 const loadEvents = async (): Promise<void> => {
   loading.value = true
   try {
-    const res = await calendarApi.getMonthEvents(year.value, month.value, {
+    const filterParams = {
       watchlistOnly: filters.value.watchlistOnly || undefined,
       freq: filters.value.freq || undefined,
       yieldGt: filters.value.yieldGt > 0 ? filters.value.yieldGt : undefined,
-    })
-    events.value = res.data
+    }
+    const nextYear = month.value === 12 ? year.value + 1 : year.value
+    const nextMonth = month.value === 12 ? 1 : month.value + 1
+
+    const [mainRes, nextRes] = await Promise.all([
+      calendarApi.getMonthEvents(year.value, month.value, filterParams),
+      calendarApi.getMonthEvents(nextYear, nextMonth, filterParams),
+    ])
+    events.value = [...mainRes.data, ...nextRes.data]
   } catch {
     events.value = []
   } finally {

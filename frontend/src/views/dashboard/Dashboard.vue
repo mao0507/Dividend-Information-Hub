@@ -36,32 +36,11 @@
       <!-- Main content: chart + sidebar -->
       <div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
 
-        <!-- Hero stock chart -->
+        <!-- TAIEX index chart -->
         <div class="bg-surface-2 border border-border rounded-[var(--radius)] overflow-hidden">
           <div class="flex items-center gap-3 px-5 py-4 border-b border-border">
-            <template v-if="heroStock">
-              <button
-                type="button"
-                class="text-left font-mono text-sm font-semibold text-content hover:text-accent transition-colors"
-                @click="router.push(`/stock/${heroStock.code}`)"
-              >
-                {{ heroStock.name }}
-              </button>
-              <span class="text-content-faint font-mono text-xs">{{ heroStock.code }}</span>
-              <Chip v-if="heroStock.yieldPct != null" :pt="{ root: { style: { color: 'var(--accent)', background: 'rgba(34,197,94,0.12)' } } }">
-                殖利率 {{ heroStock.yieldPct.toFixed(1) }}%
-              </Chip>
-            </template>
-            <template v-else>
-              <span class="font-mono text-sm font-semibold text-content">加權指數</span>
-              <span class="text-content-faint font-mono text-xs">TAIEX</span>
-              <RouterLink
-                to="/watchlist"
-                class="ml-2 text-[10px] font-mono text-accent hover:underline"
-              >
-                加入自選以顯示 Hero 個股
-              </RouterLink>
-            </template>
+            <span class="font-mono text-sm font-semibold text-content">台灣加權指數</span>
+            <span class="text-content-faint font-mono text-xs">TAIEX</span>
             <div class="flex-1" />
             <div class="flex gap-1">
               <button
@@ -73,29 +52,23 @@
             </div>
           </div>
           <div class="px-5 py-3 flex items-baseline gap-2">
-            <template v-if="heroStock">
-              <span class="text-3xl font-mono font-semibold text-content">{{ heroStock.price.toFixed(2) }}</span>
-              <span :class="['font-mono text-sm', heroStock.change >= 0 ? 'text-up' : 'text-down']">
-                {{ heroStock.change >= 0 ? '+' : '' }}{{ heroStock.change.toFixed(2) }}
-              </span>
-              <span :class="['font-mono text-xs', heroStock.changePct >= 0 ? 'text-up' : 'text-down']">
-                ({{ heroStock.changePct >= 0 ? '+' : '' }}{{ heroStock.changePct.toFixed(2) }}%)
-              </span>
-            </template>
-            <template v-else>
-              <span class="text-3xl font-mono font-semibold text-content">21,456</span>
-              <span class="font-mono text-sm text-up">+123.4</span>
-              <span class="font-mono text-xs text-up">+0.58%</span>
-            </template>
-          </div>
-          <div v-if="heroDataNotice" class="px-5 pb-2 text-[11px] font-mono text-content-faint">
-            {{ heroDataNotice }}
+            <span class="text-3xl font-mono font-semibold text-content">
+              {{ taiexLatest ? taiexLatest.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--' }}
+            </span>
+            <span v-if="taiexLatest" :class="['font-mono text-sm', taiexLatest.change >= 0 ? 'text-up' : 'text-down']">
+              {{ taiexLatest.change >= 0 ? '+' : '' }}{{ taiexLatest.change.toFixed(2) }}
+            </span>
+            <span v-if="taiexLatest" :class="['font-mono text-xs', taiexLatest.changePct >= 0 ? 'text-up' : 'text-down']">
+              ({{ taiexLatest.changePct >= 0 ? '+' : '' }}{{ taiexLatest.changePct.toFixed(2) }}%)
+            </span>
           </div>
           <TvChart
-            :candles="heroCandles"
-            :twse-closed-dates="heroTwseClosedDates"
-            :loading="heroPricesLoading"
+            :candles="taiexCandles"
+            :twse-closed-dates="taiexClosedDates"
+            :loading="taiexLoading"
             :height="280"
+            :line-mode="true"
+            :show-volume="false"
             class="w-full"
           />
         </div>
@@ -122,8 +95,10 @@
                   <div class="font-mono text-[10px] text-content-faint">{{ ev.stockCode }} · {{ ev.type === 'exDiv' ? '除息' : '入帳' }}</div>
                 </div>
                 <div class="text-right">
-                  <div class="font-mono text-[12px] text-accent font-semibold">{{ ev.amount.toFixed(2) }}</div>
-                  <div class="font-mono text-[9px] text-content-faint">元/股</div>
+                  <div class="font-mono text-[12px] text-accent font-semibold">
+                    {{ ev.amount > 0 ? ev.amount.toFixed(2) : '尚未公布' }}
+                  </div>
+                  <div v-if="ev.amount > 0" class="font-mono text-[9px] text-content-faint">元/股</div>
                 </div>
               </div>
             </template>
@@ -211,26 +186,22 @@ import type {
   CalendarEvent,
   WatchlistGroup,
   WatchlistItem,
-  StockDetail,
   OhlcvPoint,
 } from '@/types'
 type DashboardCardState = 'ready' | 'empty' | 'stale' | 'error'
 
 const router = useRouter()
 const RANGES = ['1W', '1M', '3M', '6M', '1Y', 'MAX']
-const activeRange = ref('6M')
+const activeRange = ref<string>('6M')
 
 const summary = ref<DashboardSummary | null>(null)
 const upcoming = ref<CalendarEvent[]>([])
 const watchlistGroups = ref<WatchlistGroup[]>([])
-const watchlistLoading = ref(true)
-const heroStock = ref<StockDetail | null>(null)
-const heroCandles = ref<OhlcvPoint[]>([])
-const heroTwseClosedDates = ref<string[]>([])
-const heroPricesLoading = ref<boolean>(false)
-const heroDataNotice = ref<string | null>(null)
+const watchlistLoading = ref<boolean>(true)
+const taiexCandles = ref<OhlcvPoint[]>([])
+const taiexClosedDates = ref<string[]>([])
+const taiexLoading = ref<boolean>(false)
 const summaryLoadFailed = ref<boolean>(false)
-let heroPriceRequestToken = 0
 
 const today = computed<string>(() => new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }))
 const summaryAsOf = computed<string | null>(() =>
@@ -261,6 +232,21 @@ const accumulatedIncomeAsOfDisplay = computed<string>(() =>
 const totalInvestedDisplay = computed<string>(() =>
   `NT$ ${(summary.value?.totalInvestedAmount ?? 0).toLocaleString()}`,
 )
+
+const taiexLatest = computed<{ close: number; change: number; changePct: number } | null>(() => {
+  const candles = taiexCandles.value
+  if (!candles.length) return null
+  const last = candles[candles.length - 1]
+  const prev = candles.length > 1 ? candles[candles.length - 2] : null
+  const change = prev ? last.close - prev.close : 0
+  const changePct = prev && prev.close > 0 ? (change / prev.close) * 100 : 0
+  return {
+    close: last.close,
+    change: parseFloat(change.toFixed(2)),
+    changePct: parseFloat(changePct.toFixed(2)),
+  }
+})
+
 /**
  * 格式化月份字串。
  * @param d 日期字串
@@ -300,77 +286,48 @@ const dashYield = (item: WatchlistItem): string => {
 }
 
 /**
- * 從股價列抽取涉及年份
- * @param rows K 線列
- * @returns 年份陣列（遞增且去重）
+ * 載入 TAIEX K 線資料與對應年份休市日
+ * @returns Promise<void>
  */
-const extractYearsFromCandles = (rows: OhlcvPoint[]): number[] =>
-  [...new Set(
-    rows
-      .map((row) => Number.parseInt(String(row.date).slice(0, 4), 10))
-      .filter((y) => Number.isFinite(y) && y >= 1990 && y <= 2999),
-  )].sort((a, b) => a - b)
-
-const loadHeroPrices = async (): Promise<void> => {
-  const requestToken = ++heroPriceRequestToken
-  if (!heroStock.value) {
-    if (requestToken === heroPriceRequestToken) {
-      heroCandles.value = []
-      heroTwseClosedDates.value = []
-      heroDataNotice.value = null
-      heroPricesLoading.value = false
-    }
-    return
-  }
-  heroPricesLoading.value = true
+const loadTaiexSeries = async (): Promise<void> => {
+  taiexLoading.value = true
   try {
-    const res = await stockApi.getPriceSeries(heroStock.value.code, activeRange.value)
-    if (requestToken !== heroPriceRequestToken) return
-    heroCandles.value = res.data.data
-    const diagnostics = res.data.diagnostics
-    heroDataNotice.value = diagnostics.status === 'AVAILABLE'
-      ? null
-      : `${diagnostics.reason}${diagnostics.lastSyncedTradingDate ? `（最後同步：${diagnostics.lastSyncedTradingDate}）` : ''}`
-    const years = extractYearsFromCandles(res.data.data)
+    const res = await stockApi.getPriceSeries('TAIEX', activeRange.value)
+    taiexCandles.value = res.data.data
+    const years = [...new Set(
+      res.data.data
+        .map((row) => Number.parseInt(String(row.date).slice(0, 4), 10))
+        .filter((y) => Number.isFinite(y) && y >= 1990 && y <= 2999),
+    )].sort((a, b) => a - b)
     try {
-      const closedByYear = await Promise.all(
-        years.map((y) => stockApi.getTwseClosedDates(y)),
-      )
-      if (requestToken !== heroPriceRequestToken) return
-      heroTwseClosedDates.value = [...new Set(closedByYear.flat())]
+      const closedByYear = await Promise.all(years.map((y) => stockApi.getTwseClosedDates(y)))
+      taiexClosedDates.value = [...new Set(closedByYear.flat())]
     } catch {
-      if (requestToken !== heroPriceRequestToken) return
-      heroTwseClosedDates.value = []
-      heroDataNotice.value = heroDataNotice.value ?? '休市標記暫時不可用，已顯示可用 K 線資料'
+      taiexClosedDates.value = []
     }
   } catch {
-    if (requestToken !== heroPriceRequestToken) return
-    heroCandles.value = []
-    heroTwseClosedDates.value = []
-    heroDataNotice.value = '股價資料暫時無法取得'
+    taiexCandles.value = []
+    taiexClosedDates.value = []
   } finally {
-    if (requestToken === heroPriceRequestToken) {
-      heroPricesLoading.value = false
-    }
+    taiexLoading.value = false
   }
 }
 
-watch([heroStock, activeRange], () => {
-  void loadHeroPrices()
-}, { immediate: true })
+watch(activeRange, () => {
+  void loadTaiexSeries()
+})
 
 onMounted(async () => {
+  void loadTaiexSeries()
   try {
-    const [sumRes, upRes, wlRes, featRes] = await Promise.all([
+    const [sumRes, upRes, wlRes] = await Promise.all([
       dashboardApi.getSummary(),
       dashboardApi.getUpcoming(7),
       watchlistApi.getAll(),
-      stockApi.getFeatured(),
     ])
     summary.value = sumRes.data
     upcoming.value = upRes.data
     watchlistGroups.value = wlRes.data
-    heroStock.value = featRes.data.featured
     summaryLoadFailed.value = false
   } catch {
     summaryLoadFailed.value = true

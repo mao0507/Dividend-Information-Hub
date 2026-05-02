@@ -42,16 +42,23 @@ export const primevuePT = {
     }),
   },
   toggleswitch: {
-    root: ({ props }: any) => ({
+    root: ({ context }: any) => ({
       class: [
-        'relative inline-flex w-8 h-[18px] rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        props.modelValue ? 'bg-accent' : 'bg-surface-3',
+        'relative inline-flex w-9 h-5 rounded-full cursor-pointer transition-colors shrink-0',
+        'focus-within:outline-none focus-within:ring-2 focus-within:ring-accent',
+        context.checked ? 'bg-accent' : 'bg-surface-3',
       ].join(' '),
     }),
-    slider: ({ props }: any) => ({
+    input: {
+      class: 'absolute inset-0 w-full h-full opacity-0 cursor-pointer m-0 p-0',
+    },
+    slider: {
+      class: 'absolute inset-0 rounded-full pointer-events-none',
+    },
+    handle: ({ context }: any) => ({
       class: [
-        'absolute top-[2px] w-[14px] h-[14px] rounded-full transition-all',
-        props.modelValue ? 'left-[18px] bg-surface' : 'left-[2px] bg-content-soft',
+        'absolute top-0.5 left-0 w-4 h-4 rounded-full shadow transition-transform duration-200',
+        context.checked ? 'translate-x-[18px] bg-white' : 'translate-x-0.5 bg-content-faint',
       ].join(' '),
     }),
   },

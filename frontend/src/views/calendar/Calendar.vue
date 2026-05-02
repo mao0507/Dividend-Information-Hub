@@ -97,7 +97,13 @@
 
         <!-- 月曆格子 -->
         <div class="flex-1 overflow-auto">
-          <div class="grid grid-cols-7 h-full" style="grid-auto-rows: minmax(100px, 1fr)">
+          <div v-if="watchlistEmpty" class="flex items-center justify-center h-full">
+            <div class="text-center space-y-2">
+              <div class="font-mono text-[13px] text-content-soft">自選股清單為空</div>
+              <RouterLink to="/watchlist" class="font-mono text-[11px] text-accent hover:underline">前往新增 →</RouterLink>
+            </div>
+          </div>
+          <div v-else class="grid grid-cols-7 h-full" style="grid-auto-rows: minmax(100px, 1fr)">
             <div
               v-for="cell in calendarCells"
               :key="cell.key"
@@ -256,9 +262,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import ToggleSwitch from 'primevue/toggleswitch'
 import Chip from 'primevue/chip'
 import Dialog from 'primevue/dialog'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { calendarApi } from '@/services/api/calendar'
 import type { CalendarEvent } from '@/types'
 
@@ -408,6 +414,11 @@ const makeCell = (date: Date, currentMonth: boolean) => {
   return { key, day: date.getDate(), date, currentMonth, isToday, events: dayEvents }
 }
 
+/** 啟用自選股篩選但清單為空 */
+const watchlistEmpty = computed<boolean>(
+  () => filters.value.watchlistOnly && !loading.value && events.value.length === 0,
+)
+
 /** 月份統計資料 */
 const stats = computed<{
   total: number
@@ -485,7 +496,10 @@ const goToday = (): void => {
   month.value = today.getMonth() + 1
 }
 
-watch([year, month, filters], loadEvents, { deep: true })
+watch([year, month], loadEvents)
+watch(() => filters.value.watchlistOnly, loadEvents)
+watch(() => filters.value.freq, loadEvents)
+watch(() => filters.value.yieldGt, loadEvents)
 onMounted(loadEvents)
 </script>
 

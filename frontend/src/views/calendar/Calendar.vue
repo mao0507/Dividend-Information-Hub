@@ -130,7 +130,7 @@
               <template v-if="cell.events.length">
                 <div
                   v-for="ev in cell.events.slice(0, 2)"
-                  :key="ev.id"
+                  :key="`${ev.id}-${ev.type}`"
                   :class="[
                     'flex items-center gap-1 px-1 py-0.5 rounded-[3px] text-[9px] font-mono min-w-0 cursor-pointer',
                     ev.isWatchlist ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-3 text-content-soft',
@@ -181,7 +181,7 @@
         <tbody class="divide-y divide-border">
           <tr
             v-for="ev in overflowDialogEvents"
-            :key="ev.id"
+            :key="`${ev.id}-${ev.type}`"
             class="hover:bg-surface-3 transition-colors cursor-pointer"
             @click="overflowDialogDate = null; router.push(`/stock/${ev.stockCode}`)"
           >
@@ -215,7 +215,7 @@
               <div class="text-[15px] font-semibold text-content leading-tight truncate">{{ selectedEvent.stockName }}</div>
             </div>
             <span class="shrink-0 font-mono text-[10px] font-medium px-2 py-0.5 rounded-[5px]" style="color:var(--accent,#22c55e); background:rgba(34,197,94,0.12)">
-              {{ FREQ_OPTIONS.find(f => f.value === selectedEvent.freq)?.label ?? selectedEvent.freq }}
+              {{ FREQ_OPTIONS.find(f => f.value === selectedEvent?.freq)?.label ?? selectedEvent?.freq }}
             </span>
           </div>
 
@@ -262,7 +262,6 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import Chip from 'primevue/chip'
 import Dialog from 'primevue/dialog'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { calendarApi } from '@/services/api/calendar'
@@ -405,10 +404,13 @@ const makeCell = (date: Date, currentMonth: boolean) => {
     date.getMonth() === today.getMonth() &&
     date.getDate() === today.getDate()
 
-  const dayEvents = events.value.filter((ev) => {
-    const exDate = ev.exDate?.slice(0, 10) ?? null
-    const payDate = ev.payDate?.slice(0, 10) ?? null
-    return exDate === key || payDate === key
+  const dayEvents = events.value.flatMap((ev) => {
+    const exDateKey = ev.exDate?.slice(0, 10) ?? null
+    const payDateKey = ev.payDate?.slice(0, 10) ?? null
+    const results: CalendarEvent[] = []
+    if (exDateKey === key) results.push({ ...ev, type: 'exDiv' as const })
+    if (payDateKey === key && payDateKey !== exDateKey) results.push({ ...ev, type: 'payment' as const })
+    return results
   })
 
   return { key, day: date.getDate(), date, currentMonth, isToday, events: dayEvents }

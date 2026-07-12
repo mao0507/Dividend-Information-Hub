@@ -41,6 +41,14 @@ const mockFillTracker = {
   track: jest.fn().mockResolvedValue({ checked: 0, filled: 0, skipped: 0 }),
 };
 
+const mockAnnouncementSync = {
+  sync: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockFinmindPayDate = {
+  syncPayDates: jest.fn().mockResolvedValue({ fetched: 0, updated: 0 }),
+};
+
 describe('DataSyncController', () => {
   const controller = new DataSyncController(
     mockScheduler,
@@ -50,6 +58,8 @@ describe('DataSyncController', () => {
     mockDividendBackfill as never,
     mockUniverseSync as never,
     mockFillTracker as never,
+    mockAnnouncementSync as never,
+    mockFinmindPayDate as never,
   );
 
   beforeEach(() => {

@@ -4,10 +4,9 @@ import { DividendRecord, DividendSource } from './dividend-source.interface';
 interface FinMindDividendItem {
   stock_id: string;
   date: string;
-  cash_dividend: number;
-  stock_dividend: number;
-  ex_dividend_trading_date: string;
-  dividend_pay_date: string;
+  CashEarningsDistribution: number;    // 盈餘配息
+  CashExDividendTradingDate: string;   // 除息交易日
+  CashDividendPaymentDate: string;     // 現金股利發放日
 }
 
 interface FinMindResponse {
@@ -60,13 +59,11 @@ export class FinMindDividendSource implements DividendSource {
       }
 
       for (const item of body.data ?? []) {
-        if ((item.cash_dividend ?? 0) <= 0) continue;
-        const exDate = item.ex_dividend_trading_date
-          ? new Date(item.ex_dividend_trading_date)
-          : null;
-        const payDate = item.dividend_pay_date
-          ? new Date(item.dividend_pay_date)
-          : null;
+        if ((item.CashEarningsDistribution ?? 0) <= 0) continue;
+        const rawEx = item.CashExDividendTradingDate;
+        const rawPay = item.CashDividendPaymentDate;
+        const exDate = rawEx && rawEx !== '0' ? new Date(rawEx) : null;
+        const payDate = rawPay && rawPay !== '0' ? new Date(rawPay) : null;
         const year = exDate
           ? exDate.getFullYear()
           : new Date(item.date).getFullYear();
@@ -74,7 +71,7 @@ export class FinMindDividendSource implements DividendSource {
         records.push({
           stockCode: item.stock_id,
           year,
-          cash: item.cash_dividend,
+          cash: item.CashEarningsDistribution,
           exDate,
           payDate,
           freq: 'annual',

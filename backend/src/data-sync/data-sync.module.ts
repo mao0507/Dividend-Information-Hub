@@ -10,6 +10,7 @@ import { SyncSchedulerService } from './sync-scheduler.service';
 import { TwseDailyBackfillService } from './twse-daily-backfill.service';
 import { StockPriceValidationService } from './stock-price-validation.service';
 import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
+import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
 
 @Module({
   controllers: [DataSyncController],
@@ -17,6 +18,7 @@ import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.se
     StockPriceSyncService,
     TpexPriceSyncService,
     TwseDividendAnnouncementSyncService,
+    FinMindPayDateSyncService,
     DividendSyncService,
     DividendFillTrackerService,
     DividendHistoryBackfillService,

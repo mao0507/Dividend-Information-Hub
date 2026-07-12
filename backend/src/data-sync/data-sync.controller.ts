@@ -24,6 +24,8 @@ import type { BackfillStatus } from './dividend-history-backfill.service';
 import { MarketUniverseSyncService } from './market-universe-sync.service';
 import { DividendFillTrackerService } from './dividend-fill-tracker.service';
 import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
+import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
+import type { PayDateSyncResult } from './finmind-paydate-sync.service';
 
 @Controller('data-sync')
 export class DataSyncController {
@@ -36,6 +38,7 @@ export class DataSyncController {
     private readonly universeSync: MarketUniverseSyncService,
     private readonly fillTracker: DividendFillTrackerService,
     private readonly announcementSync: TwseDividendAnnouncementSyncService,
+    private readonly finmindPayDate: FinMindPayDateSyncService,
   ) {}
 
   /**
@@ -230,5 +233,20 @@ export class DataSyncController {
     this.assertDataSyncSecret(secret);
     void this.announcementSync.sync();
     return { message: 'Announcement sync started', lookAheadDays: 90 };
+  }
+
+  /**
+   * 從 FinMind 回填 payDate（配息日）至現有 Dividend 記錄（需標頭 `x-data-sync-secret`）
+   * 以 exDate ±7 天視窗比對，僅更新 payDate 為 null 的記錄
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
+   * @returns 取得筆數與更新筆數
+   */
+  @Post('backfill-paydate')
+  @HttpCode(HttpStatus.OK)
+  async backfillPayDate(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+  ): Promise<PayDateSyncResult> {
+    this.assertDataSyncSecret(secret);
+    return this.finmindPayDate.syncPayDates();
   }
 }

@@ -58,25 +58,36 @@ export class AuthService {
       expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN') ?? '7d',
     })
 
-    const isProd = process.env.NODE_ENV === 'production'
+    const cookieOptions = this.baseCookieOptions()
 
     res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
+      ...cookieOptions,
       maxAge: 15 * 60 * 1000,
     })
 
     res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
+      ...cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     })
   }
 
   clearTokens(res: Response) {
-    res.clearCookie('access_token')
-    res.clearCookie('refresh_token')
+    const cookieOptions = this.baseCookieOptions()
+    res.clearCookie('access_token', cookieOptions)
+    res.clearCookie('refresh_token', cookieOptions)
+  }
+
+  /**
+   * cookie 簽發與清除共用的基礎選項，避免屬性不同步導致 clearCookie 失效
+   * @returns httpOnly/secure/sameSite/path 選項
+   */
+  private baseCookieOptions() {
+    const isProd = process.env.NODE_ENV === 'production'
+    return {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax' as const,
+      path: '/',
+    }
   }
 }

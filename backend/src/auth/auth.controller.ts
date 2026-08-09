@@ -10,6 +10,7 @@ import {
   HttpCode,
 } from '@nestjs/common'
 import type { Response, Request } from 'express'
+import { Throttle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
 import { RegisterDto, LoginDto } from './dto/auth.dto'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -20,6 +21,7 @@ export class AuthController {
   constructor(private auth: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const user = await this.auth.register(dto)
     this.auth.issueTokens(user.id, user.email, res)
@@ -28,6 +30,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const user = await this.auth.login(dto)
     this.auth.issueTokens(user.id, user.email, res)

@@ -12,6 +12,7 @@
 cd backend
 npm install
 # 請先建立或編輯 .env，至少要設定 DATABASE_URL / JWT_SECRET / JWT_REFRESH_SECRET
+# DATABASE_URL 推薦用 Supabase 免費方案的 PostgreSQL（見「部署建議」章節）
 npx prisma migrate dev
 npm run db:seed
 npm run start:dev
@@ -59,3 +60,7 @@ npm run test
 
 - 前端可部署到 Vercel，`frontend/vercel.json` 已提供 SPA fallback 與 `/api` rewrite 範本（請先替換成你的後端正式網域）。
 - 後端可使用 `backend/Dockerfile` 建置容器部署（Render / Railway / Fly.io / Koyeb 皆可）。
+- 資料庫推薦用 [Supabase](https://supabase.com) 免費方案（PostgreSQL，5GB / 500MB 依方案而定）：
+  1. 建立專案後於 Project Settings → Database → Connection string 取得連線字串
+  2. 後端是長跑 Node server（非 serverless/edge function），直接用 **direct connection**（port `5432`）即可，不需要 pgbouncer connection pooler
+  3. 設定 `.env` 的 `DATABASE_URL` 後執行 `npx prisma migrate deploy` 套用既有 migrations

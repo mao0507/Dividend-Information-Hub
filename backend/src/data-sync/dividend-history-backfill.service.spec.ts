@@ -22,7 +22,13 @@ describe('DividendHistoryBackfillService', () => {
   let svc: DividendHistoryBackfillService;
   let prisma: {
     stock: { findMany: jest.Mock };
-    dividend: { findFirst: jest.Mock; update: jest.Mock; create: jest.Mock };
+    dividend: {
+      findMany: jest.Mock;
+      update: jest.Mock;
+      create: jest.Mock;
+      groupBy: jest.Mock;
+      updateMany: jest.Mock;
+    };
     marketSyncState: { findUnique: jest.Mock; upsert: jest.Mock };
   };
 
@@ -30,7 +36,7 @@ describe('DividendHistoryBackfillService', () => {
     prisma = {
       stock: { findMany: jest.fn().mockResolvedValue([{ code: '2330' }]) },
       dividend: {
-        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
         create: jest.fn(),
         groupBy: jest.fn().mockResolvedValue([]),
@@ -70,7 +76,9 @@ describe('DividendHistoryBackfillService', () => {
   });
 
   it('已存在 exDate±3天 的紀錄應 UPDATE 而非 INSERT', async () => {
-    prisma.dividend.findFirst.mockResolvedValue({ id: 'div-1' });
+    prisma.dividend.findMany.mockResolvedValue([
+      { id: 'div-1', stockCode: '2330', exDate: new Date(Date.UTC(2023, 2, 16)) },
+    ]);
     mockFetch([makeTwt49uRow('112年03月16日', '2330', '511.00', '2.75')]);
     await svc.backfillYear(2023, new Set(['2330']));
     expect(prisma.dividend.update).toHaveBeenCalledWith(

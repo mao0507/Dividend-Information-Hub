@@ -23,6 +23,14 @@ export type BackfillStatus = {
   fromYear: number | null;
 };
 
+/** 候選除息紀錄（自 TWT49U 解析後、批次 upsert 前的中繼結構） */
+type DividendCandidate = {
+  code: string;
+  exDate: Date;
+  cash: number;
+  preExClose: number | null;
+};
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((r) => setTimeout(r, ms));
 
@@ -124,7 +132,7 @@ export class DividendHistoryBackfillService {
   };
 
   /**
-   * 查詢單一年份的 TWT49U 並 upsert 回傳的除息紀錄
+   * 查詢單一年份的 TWT49U，篩選出候選除息紀錄後批次 upsert
    * @param year 西元年份
    * @param trackedCodes DB 中已存在的股票代號集合
    * @returns upsert 筆數
@@ -143,7 +151,7 @@ export class DividendHistoryBackfillService {
     const raw = (await res.json()) as Twt49uResponse;
     if (raw.stat !== 'OK' || !raw.data?.length) return 0;
 
-    let upserted = 0;
+    const candidates: DividendCandidate[] = [];
     for (const row of raw.data) {
       const code = String(row[1] ?? '').trim();
       if (!trackedCodes.has(code)) continue;
@@ -160,66 +168,86 @@ export class DividendHistoryBackfillService {
       const preExClose =
         parseFloat(String(row[3] ?? '').replace(/,/g, '')) || null;
 
-      upserted += await this.upsertDividend(code, exDate, cash, preExClose);
+      candidates.push({ code, exDate, cash, preExClose });
     }
-    return upserted;
+    if (!candidates.length) return 0;
+
+    return this.bulkUpsertDividends(year, candidates);
   };
 
   /**
-   * 以 exDate ±3 天視窗比對現有紀錄後 upsert
+   * 批次 upsert 除息紀錄
+   * 先一次查出既有紀錄（exDate ±3 天視窗）與各代號目前最大期別，
+   * 於記憶體中比對後才逐筆 update/create，避免逐列各發一次 findFirst 造成 N+1
    * 不覆蓋 filled / fillDays
-   * @param stockCode 股票代號
-   * @param exDate 除息日
-   * @param cash 現金股利
-   * @param preExClose 除息前收盤價
-   * @returns 1（成功）
+   * @param year 西元年份
+   * @param candidates 候選除息紀錄
+   * @returns upsert 筆數
    */
-  private readonly upsertDividend = async (
-    stockCode: string,
-    exDate: Date,
-    cash: number,
-    preExClose: number | null,
+  private readonly bulkUpsertDividends = async (
+    year: number,
+    candidates: DividendCandidate[],
   ): Promise<number> => {
     const windowMs = 3 * 86_400_000;
-    const existing = await this.prisma.dividend.findFirst({
-      where: {
-        stockCode,
-        exDate: {
-          gte: new Date(exDate.getTime() - windowMs),
-          lte: new Date(exDate.getTime() + windowMs),
-        },
-      },
-    });
+    const codes = [...new Set(candidates.map((c) => c.code))];
+    const exTimes = candidates.map((c) => c.exDate.getTime());
+    const minExDate = new Date(Math.min(...exTimes) - windowMs);
+    const maxExDate = new Date(Math.max(...exTimes) + windowMs);
 
-    if (existing) {
-      await this.prisma.dividend.update({
-        where: { id: existing.id },
-        data: {
-          cash,
-          exDate,
-          ...(preExClose !== null ? { preExClose } : {}),
+    const [existing, maxPeriods] = await Promise.all([
+      this.prisma.dividend.findMany({
+        where: {
+          stockCode: { in: codes },
+          exDate: { gte: minExDate, lte: maxExDate },
         },
-      });
-    } else {
-      const maxPeriodRow = await this.prisma.dividend.findFirst({
-        where: { stockCode, year: exDate.getUTCFullYear() },
-        orderBy: { period: 'desc' },
-        select: { period: true },
-      });
-      const period = (maxPeriodRow?.period ?? 0) + 1;
-      await this.prisma.dividend.create({
-        data: {
-          stockCode,
-          year: exDate.getUTCFullYear(),
-          period,
-          freq: inferFreq(period),
-          cash,
-          exDate,
-          ...(preExClose !== null ? { preExClose } : {}),
-        },
-      });
+      }),
+      this.prisma.dividend.groupBy({
+        by: ['stockCode'],
+        where: { stockCode: { in: codes }, year },
+        _max: { period: true },
+      }),
+    ]);
+
+    const periodCounters = new Map<string, number>(
+      maxPeriods.map((p) => [p.stockCode, p._max.period ?? 0]),
+    );
+
+    let upserted = 0;
+    for (const candidate of candidates) {
+      const match = existing.find(
+        (e) =>
+          e.stockCode === candidate.code &&
+          e.exDate !== null &&
+          Math.abs(e.exDate.getTime() - candidate.exDate.getTime()) <= windowMs,
+      );
+
+      if (match) {
+        await this.prisma.dividend.update({
+          where: { id: match.id },
+          data: {
+            cash: candidate.cash,
+            exDate: candidate.exDate,
+            ...(candidate.preExClose !== null ? { preExClose: candidate.preExClose } : {}),
+          },
+        });
+      } else {
+        const nextPeriod = (periodCounters.get(candidate.code) ?? 0) + 1;
+        periodCounters.set(candidate.code, nextPeriod);
+        await this.prisma.dividend.create({
+          data: {
+            stockCode: candidate.code,
+            year,
+            period: nextPeriod,
+            freq: inferFreq(nextPeriod),
+            cash: candidate.cash,
+            exDate: candidate.exDate,
+            ...(candidate.preExClose !== null ? { preExClose: candidate.preExClose } : {}),
+          },
+        });
+      }
+      upserted++;
     }
-    return 1;
+    return upserted;
   };
 
   /**

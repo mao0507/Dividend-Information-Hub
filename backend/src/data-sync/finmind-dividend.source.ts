@@ -1,19 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { DividendRecord, DividendSource } from './dividend-source.interface';
-
-interface FinMindDividendItem {
-  stock_id: string;
-  date: string;
-  CashEarningsDistribution: number;    // 盈餘配息
-  CashExDividendTradingDate: string;   // 除息交易日
-  CashDividendPaymentDate: string;     // 現金股利發放日
-}
-
-interface FinMindResponse {
-  status: number;
-  msg: string;
-  data?: FinMindDividendItem[];
-}
+import { FinMindClient } from './finmind-client';
 
 /**
  * FinMind TaiwanStockDividend 資料源（需 token + 付費方案）
@@ -22,12 +9,15 @@ interface FinMindResponse {
 export class FinMindDividendSource implements DividendSource {
   readonly name = 'FinMind_TaiwanStockDividend';
   private readonly logger = new Logger(FinMindDividendSource.name);
-  private readonly BASE_URL = 'https://api.finmindtrade.com/api/v4/data';
 
   /**
    * @param token FinMind API token（來自環境變數）
+   * @param finMindClient 共用 FinMind API 客戶端（內建節流與 402 判斷）
    */
-  constructor(private readonly token: string) {}
+  constructor(
+    private readonly token: string,
+    private readonly finMindClient: FinMindClient,
+  ) {}
 
   /**
    * 從 FinMind 取得指定日期後的配息紀錄
@@ -46,13 +36,11 @@ export class FinMindDividendSource implements DividendSource {
     const records: DividendRecord[] = [];
 
     for (const code of trackedCodes) {
-      const url =
-        `${this.BASE_URL}?dataset=TaiwanStockDividend` +
-        `&data_id=${code}&start_date=${startDateStr}&token=${this.token}`;
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
+      const body = await this.finMindClient.fetchDividendData({
+        code,
+        startDate: startDateStr,
+        token: this.token,
       });
-      const body = (await res.json()) as FinMindResponse;
 
       if (body.status !== 200) {
         throw new Error(`FinMind API error (${body.status}): ${body.msg}`);
@@ -66,7 +54,7 @@ export class FinMindDividendSource implements DividendSource {
         const payDate = rawPay && rawPay !== '0' ? new Date(rawPay) : null;
         const year = exDate
           ? exDate.getFullYear()
-          : new Date(item.date).getFullYear();
+          : new Date(item.date ?? Date.now()).getFullYear();
 
         records.push({
           stockCode: item.stock_id,

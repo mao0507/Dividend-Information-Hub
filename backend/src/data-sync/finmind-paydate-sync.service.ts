@@ -1,31 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
-
-interface FinMindDividendItem {
-  stock_id: string
-  CashExDividendTradingDate: string   // 除息交易日
-  CashDividendPaymentDate: string     // 現金股利發放日
-  CashEarningsDistribution: number   // 盈餘配息
-}
-
-interface FinMindResponse {
-  status: number
-  msg: string
-  data?: FinMindDividendItem[]
-}
+import { FinMindClient } from './finmind-client'
 
 export interface PayDateSyncResult {
   fetched: number
   updated: number
   rateLimited: boolean
 }
-
-const DELAY_MS = 250
-const BASE_URL = 'https://api.finmindtrade.com/api/v4/data'
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms))
 
 @Injectable()
 export class FinMindPayDateSyncService {
@@ -34,6 +16,7 @@ export class FinMindPayDateSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly finMindClient: FinMindClient,
   ) {}
 
   /**
@@ -69,22 +52,15 @@ export class FinMindPayDateSyncService {
     let rateLimited = false
 
     for (const code of codes) {
-      await sleep(DELAY_MS)
-
-      const url =
-        `${BASE_URL}?dataset=TaiwanStockDividend` +
-        `&data_id=${code}&start_date=${startDateStr}&token=${token}`
-
-      let body: FinMindResponse
+      let body: Awaited<ReturnType<typeof this.finMindClient.fetchDividendData>>
       try {
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-        body = (await res.json()) as FinMindResponse
+        body = await this.finMindClient.fetchDividendData({ code, startDate: startDateStr, token })
       } catch (err) {
-        this.logger.warn(`FinMindPayDateSync: 網路錯誤 ${code} — ${err}`)
+        this.finMindClient.logFetchError(code, err)
         continue
       }
 
-      if (body.status === 402) {
+      if (this.finMindClient.isRateLimited(body)) {
         this.logger.warn('FinMindPayDateSync: 遇到 rate limit (402)，中止')
         rateLimited = true
         break

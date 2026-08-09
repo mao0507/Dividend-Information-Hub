@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing'
 import { ConfigService } from '@nestjs/config'
 import { FinMindPayDateSyncService } from './finmind-paydate-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { FinMindClient } from './finmind-client'
 
 const makeDividendRow = (overrides: Partial<{ stockCode: string }> = {}) => ({
   stockCode: '2330',
@@ -18,7 +19,11 @@ describe('FinMindPayDateSyncService', () => {
     }
   }
   let config: { get: jest.Mock }
-  let fetchMock: jest.Mock
+  let finMindClient: {
+    fetchDividendData: jest.Mock
+    isRateLimited: jest.Mock
+    logFetchError: jest.Mock
+  }
 
   beforeEach(async () => {
     prisma = {
@@ -29,14 +34,18 @@ describe('FinMindPayDateSyncService', () => {
       },
     }
     config = { get: jest.fn().mockReturnValue('test-token') }
-    fetchMock = jest.fn()
-    global.fetch = fetchMock as unknown as typeof fetch
+    finMindClient = {
+      fetchDividendData: jest.fn(),
+      isRateLimited: jest.fn((res: { status: number }) => res.status === 402),
+      logFetchError: jest.fn(),
+    }
 
     const mod = await Test.createTestingModule({
       providers: [
         FinMindPayDateSyncService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: config },
+        { provide: FinMindClient, useValue: finMindClient },
       ],
     }).compile()
 
@@ -49,16 +58,16 @@ describe('FinMindPayDateSyncService', () => {
     config.get.mockReturnValue(undefined)
 
     await expect(svc.syncPayDates()).rejects.toThrow('FINMIND_TOKEN not configured')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(finMindClient.fetchDividendData).not.toHaveBeenCalled()
   })
 
-  it('無待補 payDate 的股票時應回傳全零結果，且不呼叫 fetch', async () => {
+  it('無待補 payDate 的股票時應回傳全零結果，且不呼叫 FinMindClient', async () => {
     prisma.dividend.findMany.mockResolvedValue([])
 
     const result = await svc.syncPayDates()
 
     expect(result).toEqual({ fetched: 0, updated: 0, rateLimited: false })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(finMindClient.fetchDividendData).not.toHaveBeenCalled()
   })
 
   it('遇到 402 rate limit 時應中止並回傳 rateLimited=true', async () => {
@@ -66,31 +75,27 @@ describe('FinMindPayDateSyncService', () => {
       makeDividendRow({ stockCode: '2330' }),
       makeDividendRow({ stockCode: '2317' }),
     ])
-    fetchMock.mockResolvedValue({
-      json: async () => ({ status: 402, msg: 'rate limit' }),
-    })
+    finMindClient.fetchDividendData.mockResolvedValue({ status: 402, msg: 'rate limit' })
 
     const result = await svc.syncPayDates()
 
     expect(result.rateLimited).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(finMindClient.fetchDividendData).toHaveBeenCalledTimes(1)
   })
 
   it('找到對應 exDate 視窗內的 payDate=null 記錄時應更新並累計 updated', async () => {
     prisma.dividend.findMany.mockResolvedValue([makeDividendRow()])
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        status: 200,
-        msg: 'success',
-        data: [
-          {
-            stock_id: '2330',
-            CashExDividendTradingDate: '2024-06-13',
-            CashDividendPaymentDate: '2024-07-18',
-            CashEarningsDistribution: 2.5,
-          },
-        ],
-      }),
+    finMindClient.fetchDividendData.mockResolvedValue({
+      status: 200,
+      msg: 'success',
+      data: [
+        {
+          stock_id: '2330',
+          CashExDividendTradingDate: '2024-06-13',
+          CashDividendPaymentDate: '2024-07-18',
+          CashEarningsDistribution: 2.5,
+        },
+      ],
     })
     prisma.dividend.findFirst.mockResolvedValue({ id: 'div-1' })
 
@@ -106,19 +111,17 @@ describe('FinMindPayDateSyncService', () => {
 
   it('payDate 或 exDate 為 "0" 時應略過該筆，不查詢也不更新', async () => {
     prisma.dividend.findMany.mockResolvedValue([makeDividendRow()])
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        status: 200,
-        msg: 'success',
-        data: [
-          {
-            stock_id: '2330',
-            CashExDividendTradingDate: '0',
-            CashDividendPaymentDate: '0',
-            CashEarningsDistribution: 0,
-          },
-        ],
-      }),
+    finMindClient.fetchDividendData.mockResolvedValue({
+      status: 200,
+      msg: 'success',
+      data: [
+        {
+          stock_id: '2330',
+          CashExDividendTradingDate: '0',
+          CashDividendPaymentDate: '0',
+          CashEarningsDistribution: 0,
+        },
+      ],
     })
 
     const result = await svc.syncPayDates()
@@ -129,19 +132,17 @@ describe('FinMindPayDateSyncService', () => {
 
   it('找不到對應 Dividend 記錄時 updated 應維持 0', async () => {
     prisma.dividend.findMany.mockResolvedValue([makeDividendRow()])
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        status: 200,
-        msg: 'success',
-        data: [
-          {
-            stock_id: '2330',
-            CashExDividendTradingDate: '2024-06-13',
-            CashDividendPaymentDate: '2024-07-18',
-            CashEarningsDistribution: 2.5,
-          },
-        ],
-      }),
+    finMindClient.fetchDividendData.mockResolvedValue({
+      status: 200,
+      msg: 'success',
+      data: [
+        {
+          stock_id: '2330',
+          CashExDividendTradingDate: '2024-06-13',
+          CashDividendPaymentDate: '2024-07-18',
+          CashEarningsDistribution: 2.5,
+        },
+      ],
     })
     prisma.dividend.findFirst.mockResolvedValue(null)
 
@@ -156,15 +157,14 @@ describe('FinMindPayDateSyncService', () => {
       makeDividendRow({ stockCode: '2330' }),
       makeDividendRow({ stockCode: '2317' }),
     ])
-    fetchMock
+    finMindClient.fetchDividendData
       .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce({
-        json: async () => ({ status: 200, msg: 'success', data: [] }),
-      })
+      .mockResolvedValueOnce({ status: 200, msg: 'success', data: [] })
 
     const result = await svc.syncPayDates()
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(finMindClient.fetchDividendData).toHaveBeenCalledTimes(2)
+    expect(finMindClient.logFetchError).toHaveBeenCalledWith('2330', expect.any(Error))
     expect(result.rateLimited).toBe(false)
   })
 })

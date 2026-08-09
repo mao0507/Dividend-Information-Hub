@@ -58,13 +58,17 @@ export class DataSyncController {
   };
 
   /**
-   * 手動觸發完整資料同步（TWSE + TPEx 股價 + 配息）
+   * 手動觸發完整資料同步（TWSE + TPEx 股價 + 配息）（需標頭 `x-data-sync-secret`）
    * 同步進行中再次呼叫將回傳 409 Conflict
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
    * @returns 同步結果摘要 { twsePriceRows, tpexPriceRows, dividendRows, durationMs }
    */
   @Post('trigger')
   @HttpCode(HttpStatus.OK)
-  async trigger(): Promise<SyncResult> {
+  async trigger(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+  ): Promise<SyncResult> {
+    this.assertDataSyncSecret(secret);
     if (this.scheduler.isRunning) {
       throw new ConflictException('Sync is already running');
     }

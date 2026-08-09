@@ -7,11 +7,13 @@ import { Request } from 'express'
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(config: ConfigService) {
+    const secret = config.get<string>('JWT_REFRESH_SECRET')
+    if (!secret) throw new Error('JWT_REFRESH_SECRET not configured')
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req: Request) => req?.cookies?.refresh_token,
       ]),
-      secretOrKey: config.get<string>('JWT_REFRESH_SECRET') ?? 'fallback-refresh-secret',
+      secretOrKey: secret,
       passReqToCallback: true,
     })
   }

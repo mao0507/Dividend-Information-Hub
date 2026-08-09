@@ -74,7 +74,7 @@ describe('DataSyncController', () => {
       durationMs: 1200,
     });
 
-    const result = await controller.trigger();
+    const result = await controller.trigger('test-secret');
     expect(result).toEqual({
       priceRows: 50,
       dividendRows: 10,
@@ -83,16 +83,22 @@ describe('DataSyncController', () => {
     expect(mockScheduler.isRunning).toBe(false);
   });
 
+  it('throws 401 when secret is missing or wrong', async () => {
+    await expect(controller.trigger(undefined)).rejects.toThrow(UnauthorizedException);
+    await expect(controller.trigger('wrong-secret')).rejects.toThrow(UnauthorizedException);
+    expect(mockScheduler.runSync).not.toHaveBeenCalled();
+  });
+
   it('throws 409 Conflict when sync is already running', async () => {
     mockScheduler.isRunning = true;
-    await expect(controller.trigger()).rejects.toThrow(ConflictException);
+    await expect(controller.trigger('test-secret')).rejects.toThrow(ConflictException);
     expect(mockScheduler.runSync).not.toHaveBeenCalled();
   });
 
   it('resets isRunning to false even if runSync throws', async () => {
     mockScheduler.runSync.mockRejectedValue(new Error('sync failed'));
 
-    await expect(controller.trigger()).rejects.toThrow('sync failed');
+    await expect(controller.trigger('test-secret')).rejects.toThrow('sync failed');
     expect(mockScheduler.isRunning).toBe(false);
   });
 

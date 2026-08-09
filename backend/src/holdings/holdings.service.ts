@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateHoldingLotDto } from './dto/create-holding-lot.dto'
+
+/** Prisma 互動式交易 client（`$transaction` callback 內或外部呼叫皆可） */
+type PrismaOrTx = PrismaService | Prisma.TransactionClient
 
 export interface HoldingLotRow {
   id: string
@@ -41,23 +45,26 @@ export class HoldingsService {
     const stockExists = await this.prisma.stock.count({ where: { code: dto.stockCode } })
     if (!stockExists) throw new BadRequestException('無效的股票代號')
 
-    const lot = await this.prisma.holdingLot.create({
-      data: {
-        userId,
-        stockCode: dto.stockCode,
-        buyTimestamp: dto.buyTimestamp,
-        buyPrice: dto.buyPrice,
-        buyQuantity: dto.buyQuantity,
-      },
-      select: { id: true, stockCode: true, buyTimestamp: true, buyPrice: true, buyQuantity: true },
-    })
+    return this.prisma.$transaction(async (tx) => {
+      const lot = await tx.holdingLot.create({
+        data: {
+          userId,
+          stockCode: dto.stockCode,
+          buyTimestamp: dto.buyTimestamp,
+          buyPrice: dto.buyPrice,
+          buyQuantity: dto.buyQuantity,
+        },
+        select: { id: true, stockCode: true, buyTimestamp: true, buyPrice: true, buyQuantity: true },
+      })
 
-    await this.recalculateHolding(userId, dto.stockCode)
-    return lot
+      await this.recalculateHolding(userId, dto.stockCode, tx)
+      return lot
+    })
   }
 
   /**
    * 刪除買入批次並同步重算 Holding；若為最後一筆則刪除 Holding。
+   * 批次刪除與 Holding 重算包在同一交易內，避免中途失敗導致兩者不同步。
    * @param userId 使用者 ID
    * @param lotId 批次 ID
    */
@@ -65,8 +72,10 @@ export class HoldingsService {
     const lot = await this.prisma.holdingLot.findFirst({ where: { id: lotId, userId } })
     if (!lot) throw new NotFoundException('批次不存在或無權限存取')
 
-    await this.prisma.holdingLot.delete({ where: { id: lotId } })
-    await this.recalculateHolding(userId, lot.stockCode)
+    await this.prisma.$transaction(async (tx) => {
+      await tx.holdingLot.delete({ where: { id: lotId } })
+      await this.recalculateHolding(userId, lot.stockCode, tx)
+    })
   }
 
   /**
@@ -139,19 +148,24 @@ export class HoldingsService {
 
   /**
    * 重算指定使用者與股票的 Holding 彙總（shares、avgCost、boughtAt、earnedDividend）。
-   * 若無剩餘批次則刪除 Holding。
+   * 若無剩餘批次則刪除 Holding。呼叫端若在 `$transaction` 內，傳入 `tx` 確保與批次寫入原子化。
    * @param userId 使用者 ID
    * @param stockCode 股票代號
+   * @param client Prisma client 或交易 client，預設用 this.prisma（非交易情境，如測試直接呼叫）
    */
-  readonly recalculateHolding = async (userId: string, stockCode: string): Promise<void> => {
-    const lots = await this.prisma.holdingLot.findMany({
+  readonly recalculateHolding = async (
+    userId: string,
+    stockCode: string,
+    client: PrismaOrTx = this.prisma,
+  ): Promise<void> => {
+    const lots = await client.holdingLot.findMany({
       where: { userId, stockCode },
       orderBy: { buyTimestamp: 'asc' },
       select: { buyTimestamp: true, buyPrice: true, buyQuantity: true },
     })
 
     if (!lots.length) {
-      await this.prisma.holding.deleteMany({ where: { userId, stockCode } })
+      await client.holding.deleteMany({ where: { userId, stockCode } })
       return
     }
 
@@ -160,7 +174,7 @@ export class HoldingsService {
     const avgCost = totalCost / shares
     const boughtAt = lots[0].buyTimestamp
 
-    const dividends = await this.prisma.dividend.findMany({
+    const dividends = await client.dividend.findMany({
       where: { stockCode, filled: true, payDate: { not: null } },
       select: { cash: true, payDate: true },
     })
@@ -172,7 +186,7 @@ export class HoldingsService {
       return sum + lotIncome
     }, 0)
 
-    await this.prisma.holding.upsert({
+    await client.holding.upsert({
       where: { userId_stockCode: { userId, stockCode } },
       update: { shares, avgCost, boughtAt, earnedDividend },
       create: { userId, stockCode, shares, avgCost, boughtAt, earnedDividend },

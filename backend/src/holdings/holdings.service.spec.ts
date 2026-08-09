@@ -34,6 +34,7 @@ describe('HoldingsService', () => {
       upsert: jest.Mock
     }
     dividend: { findMany: jest.Mock }
+    $transaction: jest.Mock
   }
 
   beforeEach(async () => {
@@ -51,6 +52,7 @@ describe('HoldingsService', () => {
         upsert: jest.fn(),
       },
       dividend: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
     }
 
     const mod = await Test.createTestingModule({

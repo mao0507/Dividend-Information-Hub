@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import type { TwseSeedStockRow } from './twse-seed-universe.types';
 
-/** TWSE 全日行情 JSON（與 `StockPriceSyncService` 所用一致） */
-type TwseDayAllResponse = {
-  stat: string;
-  date?: string;
-  data?: string[][];
+/** TWSE OpenAPI 全日行情列（節錄；`Date` 為民國年 YYYMMDD） */
+type TwseDayAllOpenApiRow = {
+  Date: string;
+  Code: string;
+  Name: string;
 };
 
 /** OpenAPI 上市公司基本資料（節錄） */
@@ -20,8 +20,12 @@ type TwseIndustryRow = {
   產業別: string;
 };
 
-const TWSE_DAY_ALL =
-  'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL';
+/**
+ * `rwd/zh/afterTrading/STOCK_DAY_ALL` 的 `response=json` 參數已失效（實測恆回傳 CSV），
+ * 改用永遠回傳 JSON 的 OpenAPI 版本（不支援指定日期，恆回傳最近一個交易日）
+ */
+const TWSE_DAY_ALL_OPENAPI =
+  'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
 const OPENAPI_COMPANIES = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L';
 const OPENAPI_INDUSTRIES = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L';
 
@@ -39,59 +43,14 @@ const sleepTwseThrottle = (): Promise<void> =>
   new Promise((r) => setTimeout(r, SEED_TWSE_HTTP_GAP_MS));
 
 /**
- * 將時間轉為台北當日日曆分量
- * @param d 參考時間
- * @returns 西元年、月、日
+ * 民國年 YYYMMDD 轉西元 YYYYMMDD
+ * @param roc 民國年日期字串，例如 "1150807"
+ * @returns 西元 YYYYMMDD，例如 "20260807"
  */
-const getYmdInTaipei = (d: Date): { y: number; m: number; day: number } => {
-  const s = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-  const [y, m, day] = s.split('-').map((x) => parseInt(x, 10));
-  return { y, m, day };
-};
-
-/**
- * 格式化為 TWSE `STOCK_DAY_ALL` 所需之 YYYYMMDD（台北日曆）
- * @param date 參考時間
- * @returns YYYYMMDD 字串
- */
-const formatDateTwse = (date: Date): string => {
-  const { y, m, day } = getYmdInTaipei(date);
-  return `${y}${String(m).padStart(2, '0')}${String(day).padStart(2, '0')}`;
-};
-
-/**
- * 自最近之台北日曆日起往回尋找，取得第一個 `STOCK_DAY_ALL` 有成交資料之交易日
- * @param ref 參考時間（預設現在）
- * @param maxLookbackDays 最多往回找幾天
- * @returns 該日 `Date`（UTC 午夜不代表交易時刻，僅供鍵入 TWSE 日期參數）
- */
-export const findRecentTradingDateWithDayAll = async (
-  ref: Date = new Date(),
-  maxLookbackDays = 21,
-): Promise<Date> => {
-  const cur = new Date(ref);
-  for (let i = 0; i < maxLookbackDays; i++) {
-    const dateStr = formatDateTwse(cur);
-    const url = `${TWSE_DAY_ALL}?date=${dateStr}&response=json`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    if (!res.ok) {
-      cur.setDate(cur.getDate() - 1);
-      continue;
-    }
-    const raw = (await res.json()) as TwseDayAllResponse;
-    if (raw.stat === 'OK' && raw.data && raw.data.length > 0) {
-      return cur;
-    }
-    cur.setDate(cur.getDate() - 1);
-  }
-  throw new Error(
-    `TWSE STOCK_DAY_ALL：${maxLookbackDays} 日內無有效成交資料，請稍後再試或改用 SEED_TWSE_LIST_PATH`,
-  );
+const rocToYmd = (roc: string): string => {
+  const y = parseInt(roc.slice(0, roc.length - 4), 10) + 1911;
+  const monthDay = roc.slice(roc.length - 4);
+  return `${y}${monthDay}`;
 };
 
 /**
@@ -130,20 +89,21 @@ const fetchIndustryByCode = async (): Promise<Map<string, string>> => {
 };
 
 /**
- * 取得單一台北日曆日之 STOCK_DAY_ALL 列資料
- * @param onDate 參考時間（取其台北日曆日）
- * @returns TWSE 回傳之 `data` 列
+ * 取得最近一個交易日之全日行情（OpenAPI 恆回傳 JSON，不支援指定日期）
+ * @returns `mergeTwseDayAllWithMetadata` 相容之列資料，與行情參考日（西元 YYYYMMDD）
  */
-const fetchStockDayAllRows = async (onDate: Date): Promise<string[][]> => {
-  const dateStr = formatDateTwse(onDate);
-  const url = `${TWSE_DAY_ALL}?date=${dateStr}&response=json`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!res.ok) throw new Error(`TWSE STOCK_DAY_ALL HTTP ${res.status}`);
-  const raw = (await res.json()) as TwseDayAllResponse;
-  if (raw.stat !== 'OK' || !raw.data?.length) {
-    throw new Error(`TWSE STOCK_DAY_ALL 無資料：${dateStr}`);
-  }
-  return raw.data;
+const fetchStockDayAllRows = async (): Promise<{
+  rows: string[][];
+  referenceDayYmd: string;
+}> => {
+  const res = await fetch(TWSE_DAY_ALL_OPENAPI, { headers: { 'User-Agent': UA } });
+  if (!res.ok) throw new Error(`TWSE OpenAPI STOCK_DAY_ALL HTTP ${res.status}`);
+  const raw = (await res.json()) as TwseDayAllOpenApiRow[];
+  if (!raw.length) throw new Error('TWSE OpenAPI STOCK_DAY_ALL 無資料');
+
+  const referenceDayYmd = rocToYmd(raw[0].Date);
+  const rows = raw.map((r) => [r.Code, r.Name, '', '', '', '', '', '', '']);
+  return { rows, referenceDayYmd };
 };
 
 /**
@@ -215,10 +175,7 @@ export const fetchTwseSeedUniverseOnline = async (): Promise<{
   stocks: TwseSeedStockRow[];
   referenceDayYmd: string;
 }> => {
-  const tradingDay = await findRecentTradingDateWithDayAll();
-  const referenceDayYmd = formatDateTwse(tradingDay);
-
-  const rows = await fetchStockDayAllRows(tradingDay);
+  const { rows, referenceDayYmd } = await fetchStockDayAllRows();
   await sleepTwseThrottle();
   const shortByCode = await fetchCompanyShortNames();
   await sleepTwseThrottle();

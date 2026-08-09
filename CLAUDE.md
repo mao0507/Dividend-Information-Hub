@@ -20,7 +20,7 @@
 * revert：撤銷回覆先前的 commit
 
 ## 工作流程
-- SDD：openapi.yaml = 唯一事實來源
+- SDD：openspec/specs = 唯一事實來源
 - 寫程式前必須先 /opsx:propose
 - 用 openspec apply 傳播規格變更
 

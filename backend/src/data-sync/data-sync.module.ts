@@ -11,6 +11,7 @@ import { TwseDailyBackfillService } from './twse-daily-backfill.service';
 import { StockPriceValidationService } from './stock-price-validation.service';
 import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
 import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
+import { FinMindClient } from './finmind-client';
 
 @Module({
   controllers: [DataSyncController],
@@ -19,6 +20,7 @@ import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
     TpexPriceSyncService,
     TwseDividendAnnouncementSyncService,
     FinMindPayDateSyncService,
+    FinMindClient,
     DividendSyncService,
     DividendFillTrackerService,
     DividendHistoryBackfillService,
@@ -27,5 +29,6 @@ import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
     TwseDailyBackfillService,
     StockPriceValidationService,
   ],
+  exports: [StockPriceSyncService],
 })
 export class DataSyncModule {}

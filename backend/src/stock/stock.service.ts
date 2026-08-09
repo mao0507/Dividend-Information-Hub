@@ -1,9 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { MARKET_SYNC_KEY_TWSE_STOCK_PRICE_BACKFILL } from '../data-sync/twse-sync.constants'
 import { parseTwseMiIndexQuotes, parseTwseMiIndexTaiex, StockPriceSyncService } from '../data-sync/stock-price-sync.service'
 import { formatUtcYmd, parseYmdUtcNoon } from '../data-sync/stock-date.util'
-import { CreateHoldingLotDto } from './dto/create-holding-lot.dto'
 
 type DividendRow = { year: number; period: number; freq: string; cash: number; exDate: Date | null; fillDays: number | null; filled: boolean }
 
@@ -14,6 +13,40 @@ const RANGE_DAYS: Record<string, number> = {
 /** 單一基準日漲跌幅合理上限（超過視為資料異常，避免誤導使用者） */
 const MAX_ABS_DAY_CHANGE_PCT = 100
 const TWSE_HOLIDAY_SCHEDULE_URL = 'https://www.twse.com.tw/holidaySchedule/holidaySchedule'
+
+/** 排行榜查詢參數（用於快取 key 產生與內部計算） */
+type RankingParams = {
+  yieldGt?: number
+  freq?: string
+  sector?: string
+  streakGte?: number
+  fillDaysLte?: number
+  marketCapGte?: number
+  page?: number
+  limit?: number
+}
+
+/** 排行榜查詢結果 */
+type RankingResult = {
+  data: Array<{
+    rank: number
+    code: string
+    name: string
+    sector: string
+    freq: string
+    yield: number
+    cash: number
+    price: number
+    changePct: number
+    fillRate: number
+    badge: string | undefined
+    isEtf: boolean
+  }>
+  total: number
+}
+
+/** 排行榜快取存活時間（毫秒），排行榜資料變化緩慢，1 小時內視為新鮮 */
+const RANKING_CACHE_TTL_MS = 60 * 60 * 1000
 
 type TwseHolidayScheduleResponse = {
   data?: string[][]
@@ -48,31 +81,6 @@ export type StockPriceSeriesResponse = {
 }
 
 type PriceRow = StockPriceSeriesResponse['data'][number]
-/**
- * 將日期轉為 UTC YYYY-MM-DD 鍵值。
- * @param date 日期
- * @returns UTC 日期鍵值
- */
-const toUtcDateKey = (date: Date): string => date.toISOString().slice(0, 10)
-
-export type HoldingLotResponse = {
-  id: string
-  stockCode: string
-  buyTimestamp: Date
-  buyPrice: number
-  buyQuantity: number
-}
-
-export type PortfolioAllocationSlice = {
-  stockCode: string
-  investedAmount: number
-  ratio: number
-}
-
-export type PortfolioAllocationSummary = {
-  totalInvestedAmount: number
-  slices: PortfolioAllocationSlice[]
-}
 
 /**
  * 判斷 TWSE 休市表列是否為休市日
@@ -144,6 +152,7 @@ const estimateFillRateFromDividend = (d: DividendRow | undefined): number => {
 @Injectable()
 export class StockService {
   private readonly twseClosedDateCache = new Map<number, string[]>()
+  private readonly rankingCache = new Map<string, { data: RankingResult; expiresAt: number }>()
 
   constructor(
     private prisma: PrismaService,
@@ -524,115 +533,6 @@ export class StockService {
   }
 
   /**
-   * 建立使用者持股買入批次。
-   * @param userId 使用者 ID
-   * @param dto 持股買入輸入
-   * @returns 新增後持股批次
-   */
-  readonly createHoldingLot = async (
-    userId: string,
-    dto: CreateHoldingLotDto,
-  ): Promise<HoldingLotResponse> => {
-    const stockExists = await this.prisma.stock.count({
-      where: { code: dto.stockCode },
-      take: 1,
-    })
-    if (!stockExists) {
-      throw new BadRequestException('無效的股票代號')
-    }
-    const created = await this.prisma.holdingLot.create({
-      data: {
-        userId,
-        stockCode: dto.stockCode,
-        buyTimestamp: dto.buyTimestamp,
-        buyPrice: dto.buyPrice,
-        buyQuantity: dto.buyQuantity,
-      },
-      select: {
-        id: true,
-        stockCode: true,
-        buyTimestamp: true,
-        buyPrice: true,
-        buyQuantity: true,
-      },
-    })
-    return created
-  }
-
-  /**
-   * 查詢使用者全部持股買入批次。
-   * @param userId 使用者 ID
-   * @returns 持股買入批次陣列
-   */
-  readonly listHoldingLots = async (userId: string): Promise<HoldingLotResponse[]> =>
-    this.prisma.holdingLot.findMany({
-      where: { userId },
-      orderBy: [{ buyTimestamp: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        stockCode: true,
-        buyTimestamp: true,
-        buyPrice: true,
-        buyQuantity: true,
-      },
-    })
-
-  /**
-   * 計算投資成本與持股占比切片。
-   * @param userId 使用者 ID
-   * @returns 投資總額與圓餅圖切片
-   */
-  readonly getPortfolioAllocation = async (userId: string): Promise<PortfolioAllocationSummary> => {
-    const lots = await this.prisma.holdingLot.findMany({
-      where: { userId },
-      select: { stockCode: true, buyPrice: true, buyQuantity: true },
-    })
-    const investedByStock = lots.reduce<Record<string, number>>((acc, lot) => {
-      const lotInvested = lot.buyPrice * lot.buyQuantity
-      acc[lot.stockCode] = (acc[lot.stockCode] ?? 0) + lotInvested
-      return acc
-    }, {})
-    const totalInvestedAmount = Object.values(investedByStock).reduce((sum, amount) => sum + amount, 0)
-    const slices = Object.entries(investedByStock)
-      .map(([stockCode, investedAmount]) => ({
-        stockCode,
-        investedAmount,
-        ratio: totalInvestedAmount > 0 ? investedAmount / totalInvestedAmount : 0,
-      }))
-      .sort((a, b) => b.investedAmount - a.investedAmount)
-    return { totalInvestedAmount, slices }
-  }
-
-  /**
-   * 計算自買入日起累積除息收入。
-   * @param userId 使用者 ID
-   * @returns 累積除息收入
-   */
-  readonly getDividendIncomeSinceBuy = async (userId: string): Promise<number> => {
-    const lots = await this.prisma.holdingLot.findMany({
-      where: { userId },
-      select: { stockCode: true, buyTimestamp: true, buyQuantity: true },
-    })
-    if (!lots.length) return 0
-    const stockCodes = [...new Set(lots.map((lot) => lot.stockCode))]
-    const dividends = await this.prisma.dividend.findMany({
-      where: {
-        stockCode: { in: stockCodes },
-        exDate: { not: null },
-      },
-      select: { stockCode: true, cash: true, exDate: true },
-    })
-    return lots.reduce((sum, lot) => {
-      const buyDateKey = toUtcDateKey(lot.buyTimestamp)
-      const lotIncome = dividends
-        .filter((dividend) => dividend.stockCode === lot.stockCode)
-        .filter((dividend) => (dividend.exDate ? toUtcDateKey(dividend.exDate) >= buyDateKey : false))
-        .reduce((lotSum, dividend) => lotSum + dividend.cash * lot.buyQuantity, 0)
-      return sum + lotIncome
-    }, 0)
-  }
-
-  /**
    * 取得排行榜預設篩選組合
    * @returns 預設組合列表
    */
@@ -646,19 +546,43 @@ export class StockService {
   ]
 
   /**
-   * 取得高股息排行榜（全量計算後分頁）
+   * 取得高股息排行榜（含記憶體 TTL 快取，避免每次請求都全表查詢）
+   * @param params 篩選條件與分頁參數
+   * @returns 排行榜資料與總筆數
+   */
+  readonly getRanking = async (params: RankingParams): Promise<RankingResult> => {
+    const cacheKey = this.buildRankingCacheKey(params)
+    const cached = this.rankingCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data
+    }
+    const data = await this.computeRanking(params)
+    this.rankingCache.set(cacheKey, { data, expiresAt: Date.now() + RANKING_CACHE_TTL_MS })
+    return data
+  }
+
+  /**
+   * 依排行榜查詢參數組出穩定的快取 key
+   * @param params 篩選條件與分頁參數
+   * @returns 快取 key 字串
+   */
+  private readonly buildRankingCacheKey = (params: RankingParams): string =>
+    JSON.stringify({
+      yieldGt: params.yieldGt ?? null,
+      freq: params.freq ?? null,
+      sector: params.sector ?? null,
+      streakGte: params.streakGte ?? null,
+      fillDaysLte: params.fillDaysLte ?? null,
+      marketCapGte: params.marketCapGte ?? null,
+      page: params.page ?? 1,
+      limit: params.limit ?? 50,
+    })
+
+  /**
+   * 實際計算高股息排行榜（全量計算後分頁）
    * @param params 篩選條件與分頁參數
    */
-  readonly getRanking = async (params: {
-    yieldGt?: number
-    freq?: string
-    sector?: string
-    streakGte?: number
-    fillDaysLte?: number
-    marketCapGte?: number
-    page?: number
-    limit?: number
-  }) => {
+  private readonly computeRanking = async (params: RankingParams): Promise<RankingResult> => {
     const { page = 1, limit = 50 } = params
     const curYear = new Date().getFullYear()
 

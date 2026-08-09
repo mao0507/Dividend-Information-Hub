@@ -6,7 +6,6 @@ import type {
   RankingStock,
   RankingPreset,
   StockPriceSeries,
-  HoldingLot,
 } from '@/types'
 
 const twseClosedDateCache = new Map<number, string[]>()
@@ -66,22 +65,4 @@ export const stockApi = {
   }) => api.get<{ data: RankingStock[]; total: number }>('/stocks/ranking', { params }),
 
   getRankingPresets: () => api.get<RankingPreset[]>('/stocks/ranking/presets'),
-
-  createHoldingLot: (payload: {
-    stockCode: string
-    buyTimestamp: string
-    buyPrice: number
-    buyQuantity: number
-  }) => api.post<HoldingLot>('/stocks/holdings/lots', payload),
-
-  getHoldingLots: () => api.get<HoldingLot[]>('/stocks/holdings/lots'),
-
-  getPortfolioAllocation: () =>
-    api.get<{
-      totalInvestedAmount: number
-      slices: Array<{ stockCode: string; investedAmount: number; ratio: number }>
-    }>('/stocks/holdings/allocation'),
-
-  getDividendIncomeSinceBuy: () =>
-    api.get<number>('/stocks/holdings/dividend-income-since-buy'),
 }

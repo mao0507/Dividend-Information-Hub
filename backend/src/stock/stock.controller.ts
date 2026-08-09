@@ -1,8 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common'
 import type { Request } from 'express'
 import { StockService } from './stock.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
-import { CreateHoldingLotDto } from './dto/create-holding-lot.dto'
 
 @Controller('stocks')
 @UseGuards(JwtAuthGuard)
@@ -46,30 +45,6 @@ export class StockController {
   getFeatured(@Req() req: Request) {
     const user = req.user as { id: string }
     return this.stock.getFeatured(user.id)
-  }
-
-  @Post('holdings/lots')
-  createHoldingLot(@Req() req: Request, @Body() dto: CreateHoldingLotDto) {
-    const user = req.user as { id: string }
-    return this.stock.createHoldingLot(user.id, dto)
-  }
-
-  @Get('holdings/lots')
-  listHoldingLots(@Req() req: Request) {
-    const user = req.user as { id: string }
-    return this.stock.listHoldingLots(user.id)
-  }
-
-  @Get('holdings/allocation')
-  getPortfolioAllocation(@Req() req: Request) {
-    const user = req.user as { id: string }
-    return this.stock.getPortfolioAllocation(user.id)
-  }
-
-  @Get('holdings/dividend-income-since-buy')
-  getDividendIncomeSinceBuy(@Req() req: Request) {
-    const user = req.user as { id: string }
-    return this.stock.getDividendIncomeSinceBuy(user.id)
   }
 
   @Get('trading-calendar/closed-dates')

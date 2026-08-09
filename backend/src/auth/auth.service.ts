@@ -32,7 +32,7 @@ export class AuthService {
       },
     })
 
-    return { id: user.id, email: user.email, name: user.name }
+    return { id: user.id, email: user.email, name: user.name, tokenVersion: user.tokenVersion }
   }
 
   async login(dto: LoginDto) {
@@ -42,11 +42,22 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash)
     if (!valid) throw new UnauthorizedException('Invalid credentials')
 
-    return { id: user.id, email: user.email, name: user.name }
+    return { id: user.id, email: user.email, name: user.name, tokenVersion: user.tokenVersion }
   }
 
-  issueTokens(userId: string, email: string, res: Response) {
-    const payload = { sub: userId, email }
+  /**
+   * 撤銷使用者所有既有 session（遞增 tokenVersion，讓所有已簽發的 access/refresh token 失效）
+   * @param userId 使用者 ID
+   */
+  async revokeSessions(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    })
+  }
+
+  issueTokens(userId: string, email: string, tokenVersion: number, res: Response) {
+    const payload = { sub: userId, email, tokenVersion }
 
     const accessToken = this.jwt.sign(payload, {
       secret: this.config.get('JWT_SECRET'),

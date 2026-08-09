@@ -11,6 +11,8 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  /// 登出／撤銷 session 時遞增，JWT payload 需與此值一致才視為有效
+  tokenVersion Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -73,6 +75,8 @@ model Dividend {
   stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
 
   @@unique([stockCode, year, period])
+  @@index([exDate])
+  @@index([payDate])
 }
 
 model StockPrice {

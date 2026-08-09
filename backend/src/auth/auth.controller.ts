@@ -23,8 +23,8 @@ export class AuthController {
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const user = await this.auth.register(dto)
-    this.auth.issueTokens(user.id, user.email, res)
+    const { tokenVersion, ...user } = await this.auth.register(dto)
+    this.auth.issueTokens(user.id, user.email, tokenVersion, res)
     return { user }
   }
 
@@ -32,8 +32,8 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const user = await this.auth.login(dto)
-    this.auth.issueTokens(user.id, user.email, res)
+    const { tokenVersion, ...user } = await this.auth.login(dto)
+    this.auth.issueTokens(user.id, user.email, tokenVersion, res)
     return { user }
   }
 
@@ -41,14 +41,16 @@ export class AuthController {
   @HttpCode(200)
   @UseGuards(JwtRefreshGuard)
   refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const user = req.user as { sub: string; email: string }
-    this.auth.issueTokens(user.sub, user.email, res)
+    const user = req.user as { sub: string; email: string; tokenVersion: number }
+    this.auth.issueTokens(user.sub, user.email, user.tokenVersion, res)
     return { ok: true }
   }
 
   @Delete('logout')
   @UseGuards(JwtAuthGuard)
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const user = req.user as { id: string }
+    await this.auth.revokeSessions(user.id)
     this.auth.clearTokens(res)
     return { ok: true }
   }

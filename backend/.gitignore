@@ -3,3 +3,6 @@ dist
 .env
 /generated/prisma
 *.stackdump
+
+
+bash.exe.stackdump

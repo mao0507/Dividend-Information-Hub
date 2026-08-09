@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import {
   getTaipeiCalendarDayRange,
@@ -27,6 +27,8 @@ const toUtcDateKey = (date: Date): string => date.toISOString().slice(0, 10)
  */
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name)
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -120,7 +122,8 @@ export class DashboardService {
         state: isStale ? 'stale' : 'ready',
         asOf: now.toISOString(),
       }
-    } catch {
+    } catch (err) {
+      this.logger.error(`取得持股累積股息收入失敗 (userId=${userId}): ${err}`)
       return {
         value: null,
         yoyPct: null,
@@ -160,7 +163,10 @@ export class DashboardService {
     const holdingLots = await this.prisma.holdingLot.findMany({
       where: { userId },
       select: { stockCode: true, buyPrice: true, buyQuantity: true },
-    }).catch((): Array<{ stockCode: string; buyPrice: number; buyQuantity: number }> => [])
+    }).catch((err): Array<{ stockCode: string; buyPrice: number; buyQuantity: number }> => {
+      this.logger.error(`取得持股明細失敗 (userId=${userId}): ${err}`)
+      return []
+    })
 
     const watchlistSet = new Set(watchlistCodes.map((w) => w.stockCode))
 

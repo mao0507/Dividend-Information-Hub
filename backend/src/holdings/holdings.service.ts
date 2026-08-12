@@ -31,6 +31,27 @@ export interface AllocationItem {
   totalCost: number
 }
 
+export interface HoldingPnlItem {
+  stockCode: string
+  costBasis: number
+  currentValue: number | null
+  unrealizedGain: number | null
+  unrealizedGainPct: number | null
+  priceUnavailableReason: 'priceUnavailable' | null
+}
+
+export interface PnlTotal {
+  totalCostBasis: number
+  totalCurrentValue: number
+  totalUnrealizedGain: number
+  totalUnrealizedGainPct: number
+}
+
+export interface PnlResult {
+  holdings: HoldingPnlItem[]
+  total: PnlTotal
+}
+
 @Injectable()
 export class HoldingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -144,6 +165,85 @@ export class HoldingsService {
     return stockCodes
       .map((code) => ({ stockCode: code, name: nameByCode[code] ?? code, totalCost: costByStock[code] }))
       .sort((a, b) => b.totalCost - a.totalCost)
+  }
+
+  /**
+   * 取得使用者未實現損益（依 HoldingLot 分批成本與最新收盤價計算）。
+   * 查無最新股價的持股，該筆損益欄位回傳 null 並標示原因，且不計入總計市值/損益。
+   * @param userId 使用者 ID
+   * @returns 各檔持股與投資組合總計未實現損益
+   */
+  readonly getPnl = async (userId: string): Promise<PnlResult> => {
+    const lots = await this.prisma.holdingLot.findMany({
+      where: { userId },
+      select: { stockCode: true, buyPrice: true, buyQuantity: true },
+    })
+
+    if (!lots.length) {
+      return {
+        holdings: [],
+        total: { totalCostBasis: 0, totalCurrentValue: 0, totalUnrealizedGain: 0, totalUnrealizedGainPct: 0 },
+      }
+    }
+
+    const costByStock: Record<string, number> = {}
+    const sharesByStock: Record<string, number> = {}
+    for (const lot of lots) {
+      costByStock[lot.stockCode] = (costByStock[lot.stockCode] ?? 0) + lot.buyPrice * lot.buyQuantity
+      sharesByStock[lot.stockCode] = (sharesByStock[lot.stockCode] ?? 0) + lot.buyQuantity
+    }
+
+    const stockCodes = Object.keys(costByStock)
+    const prices = await this.prisma.stockPrice.findMany({
+      where: { stockCode: { in: stockCodes } },
+      orderBy: [{ stockCode: 'asc' }, { date: 'desc' }],
+      distinct: ['stockCode'],
+      select: { stockCode: true, close: true },
+    })
+
+    const latestCloseByStock = Object.fromEntries(prices.map((p) => [p.stockCode, p.close]))
+
+    const holdings: HoldingPnlItem[] = stockCodes.map((stockCode) => {
+      const costBasis = costByStock[stockCode]
+      const close = latestCloseByStock[stockCode]
+
+      if (close === undefined) {
+        return {
+          stockCode,
+          costBasis,
+          currentValue: null,
+          unrealizedGain: null,
+          unrealizedGainPct: null,
+          priceUnavailableReason: 'priceUnavailable',
+        }
+      }
+
+      const currentValue = close * sharesByStock[stockCode]
+      const unrealizedGain = currentValue - costBasis
+      const unrealizedGainPct = costBasis === 0 ? 0 : (unrealizedGain / costBasis) * 100
+
+      return {
+        stockCode,
+        costBasis,
+        currentValue,
+        unrealizedGain,
+        unrealizedGainPct,
+        priceUnavailableReason: null,
+      }
+    })
+
+    const totalCostBasis = holdings.reduce((s, h) => s + h.costBasis, 0)
+    // 損益總計只計入有股價的持股，避免無股價持股的成本被誤算成全額虧損
+    const pricedHoldings = holdings.filter((h) => h.currentValue !== null)
+    const pricedCostBasis = pricedHoldings.reduce((s, h) => s + h.costBasis, 0)
+    const totalCurrentValue = pricedHoldings.reduce((s, h) => s + (h.currentValue ?? 0), 0)
+    const totalUnrealizedGain = totalCurrentValue - pricedCostBasis
+    const totalUnrealizedGainPct = pricedCostBasis === 0 ? 0 : (totalUnrealizedGain / pricedCostBasis) * 100
+
+    return {
+      holdings,
+      total: { totalCostBasis, totalCurrentValue, totalUnrealizedGain, totalUnrealizedGainPct },
+    }
   }
 
   /**

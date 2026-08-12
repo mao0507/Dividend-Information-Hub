@@ -53,4 +53,15 @@ export class HoldingsController {
     const user = req.user as { id: string }
     return this.holdings.getAllocation(user.id)
   }
+
+  /**
+   * 取得未實現損益（各檔持股與投資組合總計）。
+   * @param req 請求（含 JWT user）
+   * @returns 未實現損益資料
+   */
+  @Get('pnl')
+  getPnl(@Req() req: Request) {
+    const user = req.user as { id: string }
+    return this.holdings.getPnl(user.id)
+  }
 }

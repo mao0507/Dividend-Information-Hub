@@ -34,6 +34,7 @@ describe('HoldingsService', () => {
       upsert: jest.Mock
     }
     dividend: { findMany: jest.Mock }
+    stockPrice: { findMany: jest.Mock }
     $transaction: jest.Mock
   }
 
@@ -52,6 +53,7 @@ describe('HoldingsService', () => {
         upsert: jest.fn(),
       },
       dividend: { findMany: jest.fn().mockResolvedValue([]) },
+      stockPrice: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
     }
 
@@ -192,6 +194,107 @@ describe('HoldingsService', () => {
       expect(result).toHaveLength(2)
       const tsmc = result.find((r) => r.stockCode === '2330')!
       expect(tsmc.totalCost).toBe(600000)
+    })
+  })
+
+  // ─── getPnl ───────────────────────────────────────────────────────────────
+
+  describe('getPnl()', () => {
+    it('無持股時回傳空列表與全零總計', async () => {
+      prisma.holdingLot.findMany.mockResolvedValue([])
+
+      const result = await svc.getPnl('user-1')
+
+      expect(result.holdings).toEqual([])
+      expect(result.total).toEqual({
+        totalCostBasis: 0,
+        totalCurrentValue: 0,
+        totalUnrealizedGain: 0,
+        totalUnrealizedGainPct: 0,
+      })
+    })
+
+    it('依最新收盤價計算單檔與總計未實現損益', async () => {
+      prisma.holdingLot.findMany.mockResolvedValue([
+        makeLot({ stockCode: '2330', buyPrice: 600, buyQuantity: 1000 }),
+        makeLot({ id: 'lot-2', stockCode: '2330', buyPrice: 500, buyQuantity: 500, buyTimestamp: new Date('2024-02-01T00:00:00Z') }),
+      ])
+      prisma.stockPrice.findMany.mockResolvedValue([
+        { stockCode: '2330', close: 700 },
+      ])
+
+      const result = await svc.getPnl('user-1')
+
+      // costBasis = 600*1000 + 500*500 = 850000, currentValue = 700*1500 = 1050000
+      expect(result.holdings).toHaveLength(1)
+      const row = result.holdings[0]
+      expect(row.stockCode).toBe('2330')
+      expect(row.costBasis).toBe(850000)
+      expect(row.currentValue).toBe(1050000)
+      expect(row.unrealizedGain).toBe(200000)
+      expect(row.unrealizedGainPct).toBeCloseTo(23.53, 1)
+      expect(row.priceUnavailableReason).toBeNull()
+
+      expect(result.total.totalCostBasis).toBe(850000)
+      expect(result.total.totalCurrentValue).toBe(1050000)
+      expect(result.total.totalUnrealizedGain).toBe(200000)
+    })
+
+    it('查無最新股價時該檔損益欄位為 null 並附原因，不計入總計市值', async () => {
+      prisma.holdingLot.findMany.mockResolvedValue([
+        makeLot({ stockCode: '9999', buyPrice: 100, buyQuantity: 100 }),
+      ])
+      prisma.stockPrice.findMany.mockResolvedValue([])
+
+      const result = await svc.getPnl('user-1')
+
+      const row = result.holdings[0]
+      expect(row.currentValue).toBeNull()
+      expect(row.unrealizedGain).toBeNull()
+      expect(row.unrealizedGainPct).toBeNull()
+      expect(row.priceUnavailableReason).toBe('priceUnavailable')
+
+      // 無股價的持股成本不計入損益總計分母，避免被誤算成全額虧損
+      expect(result.total.totalCostBasis).toBe(10000)
+      expect(result.total.totalCurrentValue).toBe(0)
+      expect(result.total.totalUnrealizedGain).toBe(0)
+      expect(result.total.totalUnrealizedGainPct).toBe(0)
+    })
+
+    it('部分持股無股價時，總計損益只計入有股價的持股成本', async () => {
+      prisma.holdingLot.findMany.mockResolvedValue([
+        makeLot({ stockCode: '2330', buyPrice: 600, buyQuantity: 1000 }), // 有股價
+        makeLot({ id: 'lot-2', stockCode: '9999', buyPrice: 100, buyQuantity: 100 }), // 無股價
+      ])
+      prisma.stockPrice.findMany.mockResolvedValue([
+        { stockCode: '2330', close: 700 },
+      ])
+
+      const result = await svc.getPnl('user-1')
+
+      // totalCostBasis 含全部持股成本，但損益分母只算有股價的 2330（600000）
+      expect(result.total.totalCostBasis).toBe(600000 + 10000)
+      expect(result.total.totalCurrentValue).toBe(700000)
+      expect(result.total.totalUnrealizedGain).toBe(100000)
+      expect(result.total.totalUnrealizedGainPct).toBeCloseTo((100000 / 600000) * 100, 1)
+    })
+
+    it('多檔持股各自計算並加總', async () => {
+      prisma.holdingLot.findMany.mockResolvedValue([
+        makeLot({ stockCode: '2330', buyPrice: 600, buyQuantity: 1000 }),
+        makeLot({ id: 'lot-2', stockCode: '0050', buyPrice: 150, buyQuantity: 2000 }),
+      ])
+      prisma.stockPrice.findMany.mockResolvedValue([
+        { stockCode: '2330', date: new Date('2024-06-01T00:00:00Z'), close: 700 },
+        { stockCode: '0050', date: new Date('2024-06-01T00:00:00Z'), close: 140 },
+      ])
+
+      const result = await svc.getPnl('user-1')
+
+      expect(result.holdings).toHaveLength(2)
+      expect(result.total.totalCostBasis).toBe(600000 + 300000)
+      expect(result.total.totalCurrentValue).toBe(700000 + 280000)
+      expect(result.total.totalUnrealizedGain).toBe(700000 + 280000 - 900000)
     })
   })
 })

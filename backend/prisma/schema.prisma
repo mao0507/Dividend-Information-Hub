@@ -55,6 +55,7 @@ model Stock {
   watchlistItems WatchlistItem[]
   holdings       Holding[]
   holdingLots    HoldingLot[]
+  shareholdingDistributions ShareholdingDistribution[]
 }
 
 model Dividend {
@@ -77,6 +78,21 @@ model Dividend {
   @@unique([stockCode, year, period])
   @@index([exDate])
   @@index([payDate])
+}
+
+model ShareholdingDistribution {
+  id         String   @id @default(cuid())
+  stockCode  String
+  date       DateTime @db.Date
+  tier       Int
+  holderCount Int
+  shareCount  BigInt
+  percentage  Float
+
+  stock Stock @relation(fields: [stockCode], references: [code], onDelete: Cascade)
+
+  @@unique([stockCode, date, tier])
+  @@index([stockCode, date])
 }
 
 model StockPrice {

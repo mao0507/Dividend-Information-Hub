@@ -26,6 +26,8 @@ import { DividendFillTrackerService } from './dividend-fill-tracker.service';
 import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
 import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
 import type { PayDateSyncResult } from './finmind-paydate-sync.service';
+import { ChipDataSyncService } from './chip-data-sync.service';
+import type { ChipDataRefreshResult } from './chip-data-sync.service';
 
 @Controller('data-sync')
 export class DataSyncController {
@@ -39,6 +41,7 @@ export class DataSyncController {
     private readonly fillTracker: DividendFillTrackerService,
     private readonly announcementSync: TwseDividendAnnouncementSyncService,
     private readonly finmindPayDate: FinMindPayDateSyncService,
+    private readonly chipDataSync: ChipDataSyncService,
   ) {}
 
   /**
@@ -252,5 +255,20 @@ export class DataSyncController {
   ): Promise<PayDateSyncResult> {
     this.assertDataSyncSecret(secret);
     return this.finmindPayDate.syncPayDates();
+  }
+
+  /**
+   * 手動觸發股權分散表同步（需標頭 `x-data-sync-secret`）
+   * 只處理 DB 中已追蹤的股票代號
+   * @param secret 與 `DATA_SYNC_SECRET` 一致之金鑰
+   * @returns 刷新結果摘要
+   */
+  @Post('trigger-chip-data-sync')
+  @HttpCode(HttpStatus.OK)
+  async triggerChipDataSync(
+    @Headers('x-data-sync-secret') secret: string | undefined,
+  ): Promise<ChipDataRefreshResult> {
+    this.assertDataSyncSecret(secret);
+    return this.chipDataSync.refresh();
   }
 }

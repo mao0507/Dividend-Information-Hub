@@ -12,6 +12,7 @@ import { StockPriceValidationService } from './stock-price-validation.service';
 import { TwseDividendAnnouncementSyncService } from './twse-announcement-sync.service';
 import { FinMindPayDateSyncService } from './finmind-paydate-sync.service';
 import { FinMindClient } from './finmind-client';
+import { ChipDataSyncService } from './chip-data-sync.service';
 
 @Module({
   controllers: [DataSyncController],
@@ -28,7 +29,8 @@ import { FinMindClient } from './finmind-client';
     SyncSchedulerService,
     TwseDailyBackfillService,
     StockPriceValidationService,
+    ChipDataSyncService,
   ],
-  exports: [StockPriceSyncService],
+  exports: [StockPriceSyncService, ChipDataSyncService],
 })
 export class DataSyncModule {}

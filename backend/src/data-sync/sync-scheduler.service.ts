@@ -6,6 +6,7 @@ import { TpexPriceSyncService } from './tpex-price-sync.service';
 import { DividendSyncService } from './dividend-sync.service';
 import { DividendFillTrackerService } from './dividend-fill-tracker.service';
 import { MarketUniverseSyncService } from './market-universe-sync.service';
+import { ChipDataSyncService } from './chip-data-sync.service';
 
 export interface SyncResult {
   twsePriceRows: number;
@@ -26,6 +27,7 @@ export class SyncSchedulerService {
     private readonly dividendSync: DividendSyncService,
     private readonly fillTracker: DividendFillTrackerService,
     private readonly universeSync: MarketUniverseSyncService,
+    private readonly chipDataSync: ChipDataSyncService,
   ) {}
 
   /**
@@ -154,6 +156,30 @@ export class SyncSchedulerService {
       );
     } catch (err) {
       this.logger.error(`Universe refresh cron failed: ${err}`);
+    }
+  }
+
+  /**
+   * 每週日 02:00（台灣時間）觸發股權分散表同步
+   * SYNC_ENABLED=true 時才執行
+   */
+  @Cron('0 2 * * 0', { timeZone: 'Asia/Taipei' })
+  async scheduleWeeklyChipDataSync(): Promise<void> {
+    if (this.config.get('SYNC_ENABLED') !== 'true') return;
+
+    const start = Date.now();
+    try {
+      const result = await this.chipDataSync.refresh();
+      this.logger.log(
+        JSON.stringify({
+          type: 'chip-data-sync',
+          ...result,
+          durationMs: Date.now() - start,
+          status: 'success',
+        }),
+      );
+    } catch (err) {
+      this.logger.error(`Chip data sync cron failed: ${err}`);
     }
   }
 

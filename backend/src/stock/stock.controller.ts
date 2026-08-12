@@ -2,11 +2,15 @@ import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common'
 import type { Request } from 'express'
 import { StockService } from './stock.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
+import { ChipDataSyncService } from '../data-sync/chip-data-sync.service'
 
 @Controller('stocks')
 @UseGuards(JwtAuthGuard)
 export class StockController {
-  constructor(private stock: StockService) {}
+  constructor(
+    private stock: StockService,
+    private chipDataSync: ChipDataSyncService,
+  ) {}
 
   @Get()
   search(@Query('q') q: string, @Query('limit') limit?: string) {
@@ -81,5 +85,16 @@ export class StockController {
   @Get(':code/fill-progress')
   getFillProgress(@Param('code') code: string) {
     return this.stock.getFillProgress(code)
+  }
+
+  /**
+   * 取得最新一日股權分散表；查無資料回傳 { available: false }
+   * @param code 股票代號
+   */
+  @Get(':code/shareholding-distribution')
+  async getShareholdingDistribution(@Param('code') code: string) {
+    const result = await this.chipDataSync.getLatestDistribution(code)
+    if (!result) return { available: false as const }
+    return { available: true as const, ...result }
   }
 }

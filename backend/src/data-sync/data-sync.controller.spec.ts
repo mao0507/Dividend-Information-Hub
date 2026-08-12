@@ -49,6 +49,10 @@ const mockFinmindPayDate = {
   syncPayDates: jest.fn().mockResolvedValue({ fetched: 0, updated: 0 }),
 };
 
+const mockChipDataSync = {
+  refresh: jest.fn().mockResolvedValue({ rowsUpserted: 0, skipped: 0, durationMs: 0 }),
+};
+
 describe('DataSyncController', () => {
   const controller = new DataSyncController(
     mockScheduler,
@@ -60,6 +64,7 @@ describe('DataSyncController', () => {
     mockFillTracker as never,
     mockAnnouncementSync as never,
     mockFinmindPayDate as never,
+    mockChipDataSync as never,
   );
 
   beforeEach(() => {

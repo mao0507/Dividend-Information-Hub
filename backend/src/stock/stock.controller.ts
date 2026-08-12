@@ -30,6 +30,9 @@ export class StockController {
     @Query('streakGte') streakGte?: string,
     @Query('fillDaysLte') fillDaysLte?: string,
     @Query('marketCapGte') marketCapGte?: string,
+    @Query('payoutRatioLte') payoutRatioLte?: string,
+    @Query('payoutRatioGte') payoutRatioGte?: string,
+    @Query('sectorRankLte') sectorRankLte?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -40,6 +43,9 @@ export class StockController {
       streakGte: streakGte ? parseInt(streakGte, 10) : undefined,
       fillDaysLte: fillDaysLte ? parseInt(fillDaysLte, 10) : undefined,
       marketCapGte: marketCapGte ? parseFloat(marketCapGte) : undefined,
+      payoutRatioLte: payoutRatioLte ? parseFloat(payoutRatioLte) : undefined,
+      payoutRatioGte: payoutRatioGte ? parseFloat(payoutRatioGte) : undefined,
+      sectorRankLte: sectorRankLte ? parseInt(sectorRankLte, 10) : undefined,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 50,
     })

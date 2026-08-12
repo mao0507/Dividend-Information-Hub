@@ -22,9 +22,15 @@ type RankingParams = {
   streakGte?: number
   fillDaysLte?: number
   marketCapGte?: number
+  payoutRatioLte?: number
+  payoutRatioGte?: number
+  sectorRankLte?: number
   page?: number
   limit?: number
 }
+
+/** 單一年度殖利率（以當前最新收盤價估算，非該年度實際股價） */
+type YieldTrendPoint = { year: number; yieldPct: number }
 
 /** 排行榜查詢結果 */
 type RankingResult = {
@@ -41,9 +47,16 @@ type RankingResult = {
     fillRate: number
     badge: string | undefined
     isEtf: boolean
+    yieldTrend: YieldTrendPoint[]
+    payoutRatio: number | null
+    payoutRatioUnavailableReason: 'epsUnavailable' | null
+    sectorRank: number
   }>
   total: number
 }
+
+/** 殖利率趨勢最多回溯年數 */
+const YIELD_TREND_YEARS = 5
 
 /** 排行榜快取存活時間（毫秒），排行榜資料變化緩慢，1 小時內視為新鮮 */
 const RANKING_CACHE_TTL_MS = 60 * 60 * 1000
@@ -133,6 +146,48 @@ const countDividendStreak = (dividends: DividendRow[], curYear: number): number 
     else break
   }
   return streak
+}
+
+/**
+ * 依歷年配息計算殖利率趨勢（以目前最新收盤價估算各年度殖利率，非該年度實際股價）
+ * @param dividends 配息紀錄
+ * @param currentPrice 目前最新收盤價
+ * @returns 依年份由舊到新排序的殖利率趨勢，最多回溯 YIELD_TREND_YEARS 年
+ */
+const buildYieldTrend = (dividends: DividendRow[], currentPrice: number): YieldTrendPoint[] => {
+  const cashByYear = dividends.reduce<Record<number, number>>((acc, d) => {
+    acc[d.year] = (acc[d.year] ?? 0) + d.cash
+    return acc
+  }, {})
+
+  return Object.entries(cashByYear)
+    .map(([year, cash]) => ({
+      year: Number(year),
+      yieldPct: currentPrice > 0 ? parseFloat(((cash / currentPrice) * 100).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => a.year - b.year)
+    .slice(-YIELD_TREND_YEARS)
+}
+
+/**
+ * 計算各股票在所屬產業內依殖利率排序之名次
+ * @param rows 已算好 yield 與 sector 之列
+ * @returns code -> sectorRank 對照表
+ */
+const buildSectorRankByCode = (
+  rows: Array<{ code: string; sector: string; yield: number }>,
+): Map<string, number> => {
+  const bySector = rows.reduce<Record<string, typeof rows>>((acc, r) => {
+    ;(acc[r.sector] ??= []).push(r)
+    return acc
+  }, {})
+
+  const result = new Map<string, number>()
+  for (const sectorRows of Object.values(bySector)) {
+    const sorted = [...sectorRows].sort((a, b) => b.yield - a.yield)
+    sorted.forEach((r, i) => result.set(r.code, i + 1))
+  }
+  return result
 }
 
 /**
@@ -574,6 +629,9 @@ export class StockService {
       streakGte: params.streakGte ?? null,
       fillDaysLte: params.fillDaysLte ?? null,
       marketCapGte: params.marketCapGte ?? null,
+      payoutRatioLte: params.payoutRatioLte ?? null,
+      payoutRatioGte: params.payoutRatioGte ?? null,
+      sectorRankLte: params.sectorRankLte ?? null,
       page: params.page ?? 1,
       limit: params.limit ?? 50,
     })
@@ -620,6 +678,8 @@ export class StockService {
       else if (streak >= 10) badge = '長配'
       if (s.isEtf) badge = badge ? `${badge}·ETF` : 'ETF'
 
+      const yieldTrend = buildYieldTrend(divs, price)
+
       return {
         code: s.code,
         name: s.name,
@@ -635,10 +695,17 @@ export class StockService {
         streak,
         latestFillDays,
         marketCapNum: cap,
+        yieldTrend,
+        // 目前資料源無 EPS，配息率無法計算；待 EPS 資料源補齊後再實作
+        payoutRatio: null as number | null,
+        payoutRatioUnavailableReason: 'epsUnavailable' as const,
       }
     })
 
+    const sectorRankByCode = buildSectorRankByCode(rows)
+
     const filtered = rows
+      .map((r) => ({ ...r, sectorRank: sectorRankByCode.get(r.code) ?? 0 }))
       .filter((r) => params.yieldGt === undefined || r.yield >= params.yieldGt)
       .filter((r) => !params.freq || r.freq === params.freq)
       .filter((r) => params.streakGte === undefined || r.streak >= params.streakGte)
@@ -648,6 +715,14 @@ export class StockService {
           (r.latestFillDays !== null && r.latestFillDays <= params.fillDaysLte),
       )
       .filter((r) => params.marketCapGte === undefined || r.marketCapNum >= params.marketCapGte)
+      .filter(
+        (r) =>
+          (params.payoutRatioLte === undefined && params.payoutRatioGte === undefined) ||
+          (r.payoutRatio !== null &&
+            (params.payoutRatioLte === undefined || r.payoutRatio <= params.payoutRatioLte) &&
+            (params.payoutRatioGte === undefined || r.payoutRatio >= params.payoutRatioGte)),
+      )
+      .filter((r) => params.sectorRankLte === undefined || r.sectorRank <= params.sectorRankLte)
       .sort((a, b) => b.yield - a.yield)
 
     const total = filtered.length
@@ -665,6 +740,10 @@ export class StockService {
       fillRate: r.fillRate,
       badge: r.badge,
       isEtf: r.isEtf,
+      yieldTrend: r.yieldTrend,
+      payoutRatio: r.payoutRatio,
+      payoutRatioUnavailableReason: r.payoutRatioUnavailableReason,
+      sectorRank: r.sectorRank,
     }))
 
     return { data: slice, total }

@@ -219,6 +219,76 @@ describe('StockService.getPrices', () => {
   })
 })
 
+describe('StockService.getRanking', () => {
+  const mockPrisma = {
+    stock: { findMany: jest.fn() },
+  }
+  const mockPriceSync = { syncDate: jest.fn(), fetchTwseMiIndexWithRetry: jest.fn() }
+
+  const makeStock = (overrides: Record<string, unknown> = {}) => ({
+    code: '2330',
+    name: '台積電',
+    sector: '半導體',
+    isEtf: false,
+    marketCap: null,
+    dividends: [
+      { year: 2025, period: 1, freq: 'yearly', cash: 20, exDate: new Date('2025-07-01'), fillDays: 5, filled: true },
+      { year: 2024, period: 1, freq: 'yearly', cash: 18, exDate: new Date('2024-07-01'), fillDays: 5, filled: true },
+    ],
+    prices: [{ close: 500 }, { close: 490 }],
+    ...overrides,
+  })
+
+  const makeService = () => new StockService(mockPrisma as never, mockPriceSync as never)
+
+  beforeEach(() => jest.clearAllMocks())
+
+  it('回傳多年殖利率趨勢，依年份由舊到新排序', async () => {
+    mockPrisma.stock.findMany.mockResolvedValue([makeStock()])
+
+    const result = await makeService().getRanking({})
+
+    const row = result.data[0]
+    expect(row.yieldTrend).toEqual([
+      { year: 2024, yieldPct: parseFloat(((18 / 500) * 100).toFixed(2)) },
+      { year: 2025, yieldPct: parseFloat(((20 / 500) * 100).toFixed(2)) },
+    ])
+  })
+
+  it('無 EPS 資料時 payoutRatio 為 null 並註明原因，不阻擋其他欄位輸出', async () => {
+    mockPrisma.stock.findMany.mockResolvedValue([makeStock()])
+
+    const result = await makeService().getRanking({})
+
+    const row = result.data[0]
+    expect(row.payoutRatio).toBeNull()
+    expect(row.payoutRatioUnavailableReason).toBe('epsUnavailable')
+    expect(row.yield).toBeGreaterThan(0)
+  })
+
+  it('同產業內依殖利率排序計算 sectorRank', async () => {
+    mockPrisma.stock.findMany.mockResolvedValue([
+      makeStock({ code: '2330', dividends: [{ year: 2025, period: 1, freq: 'yearly', cash: 10, exDate: new Date('2025-07-01'), fillDays: 5, filled: true }], prices: [{ close: 500 }] }), // yield 2%
+      makeStock({ code: '2454', name: '聯發科', dividends: [{ year: 2025, period: 1, freq: 'yearly', cash: 50, exDate: new Date('2025-07-01'), fillDays: 5, filled: true }], prices: [{ close: 500 }] }), // yield 10%
+    ])
+
+    const result = await makeService().getRanking({})
+
+    const mtk = result.data.find((r) => r.code === '2454')!
+    const tsmc = result.data.find((r) => r.code === '2330')!
+    expect(mtk.sectorRank).toBe(1)
+    expect(tsmc.sectorRank).toBe(2)
+  })
+
+  it('payoutRatioLte 篩選時，目前無 EPS 資料故一律排除（過渡行為，待 EPS 資料源補齊）', async () => {
+    mockPrisma.stock.findMany.mockResolvedValue([makeStock()])
+
+    const result = await makeService().getRanking({ payoutRatioLte: 80 })
+
+    expect(result.data).toHaveLength(0)
+  })
+})
+
 describe('StockService.getTwseClosedDates', () => {
   const mockPrisma = {
     stockPrice: { findMany: jest.fn() },

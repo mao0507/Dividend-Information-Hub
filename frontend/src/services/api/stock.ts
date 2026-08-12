@@ -10,6 +10,19 @@ import type {
 
 const twseClosedDateCache = new Map<number, string[]>()
 
+export interface ShareholdingTier {
+  date: string
+  stockCode: string
+  tier: number
+  holderCount: number
+  shareCount: string
+  percentage: number
+}
+
+export type ShareholdingDistributionResult =
+  | { available: false }
+  | { available: true; date: string; tiers: ShareholdingTier[] }
+
 export const stockApi = {
   search: (q: string, limit = 10) =>
     api.get<StockDetail[]>('/stocks', { params: { q, limit } }),
@@ -65,4 +78,7 @@ export const stockApi = {
   }) => api.get<{ data: RankingStock[]; total: number }>('/stocks/ranking', { params }),
 
   getRankingPresets: () => api.get<RankingPreset[]>('/stocks/ranking/presets'),
+
+  getShareholdingDistribution: (code: string) =>
+    api.get<ShareholdingDistributionResult>(`/stocks/${code}/shareholding-distribution`),
 }

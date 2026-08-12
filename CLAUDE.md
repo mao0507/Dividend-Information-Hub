@@ -24,6 +24,16 @@
 - 寫程式前必須先 /opsx:propose
 - 用 openspec apply 傳播規格變更
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `mao0507/Dividend-Information-Hub`, via `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at repo root (lazy-created). See `docs/agents/domain.md`.
+
 ## 風格
 - 第一則訊息載入 caveman skill
 - Caveman 完整模式：省略填充語、片段句可接受、程式區塊保持原樣

@@ -1,9 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import HoldingsPage from './Holdings.vue'
 
-const { getHoldingsMock, getAllocationMock, createLotMock, deleteLotMock } = vi.hoisted(() => ({
+const { getHoldingsMock, getAllocationMock, getPnlMock, createLotMock, deleteLotMock } = vi.hoisted(() => ({
   getHoldingsMock: vi.fn(),
   getAllocationMock: vi.fn(),
+  getPnlMock: vi.fn(),
   createLotMock: vi.fn(),
   deleteLotMock: vi.fn(),
 }))
@@ -12,6 +13,7 @@ vi.mock('@/services/api/holdings', () => ({
   holdingsApi: {
     getHoldings: getHoldingsMock,
     getAllocation: getAllocationMock,
+    getPnl: getPnlMock,
     createLot: createLotMock,
     deleteLot: deleteLotMock,
   },
@@ -23,6 +25,14 @@ vi.mock('@/components/layout/AppLayout.vue', () => ({
 
 vi.mock('@/components/chart/DonutChart.vue', () => ({
   default: { template: '<div data-testid="donut-chart" />', props: ['segments'] },
+}))
+
+vi.mock('primevue/dialog', () => ({
+  default: {
+    template: '<div v-if="visible" data-testid="dialog"><slot /><slot name="footer" /></div>',
+    props: ['visible'],
+    emits: ['update:visible'],
+  },
 }))
 
 const makeHolding = () => ({
@@ -47,6 +57,9 @@ const makeAllocation = (stockCode = '2330', totalCost = 600000) => ({
 beforeEach(() => {
   getHoldingsMock.mockResolvedValue({ data: [] })
   getAllocationMock.mockResolvedValue({ data: [] })
+  getPnlMock.mockResolvedValue({
+    data: { holdings: [], total: { totalCostBasis: 0, totalCurrentValue: 0, totalUnrealizedGain: 0, totalUnrealizedGainPct: 0 } },
+  })
   createLotMock.mockResolvedValue({ data: {} })
   deleteLotMock.mockResolvedValue({ data: {} })
 })
@@ -86,7 +99,7 @@ describe('HoldingsPage', () => {
     expect(wrapper.text()).toContain('刪除')
   })
 
-  it('點擊刪除後呼叫 deleteLot 並重新整理', async () => {
+  it('點擊刪除後需經確認對話框才呼叫 deleteLot 並重新整理', async () => {
     getHoldingsMock.mockResolvedValue({ data: [makeHolding()] })
     const wrapper = mount(HoldingsPage)
     await flushPromises()
@@ -94,9 +107,15 @@ describe('HoldingsPage', () => {
     const expandBtn = wrapper.findAll('button').find((b) => b.text().includes('2330'))
     await expandBtn!.trigger('click')
     await flushPromises()
-    // 點刪除
+    // 點刪除 → 開啟確認對話框，尚未呼叫 API
     const deleteBtn = wrapper.findAll('button').find((b) => b.text() === '刪除')
     await deleteBtn!.trigger('click')
+    await flushPromises()
+    expect(deleteLotMock).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="dialog"]').exists()).toBe(true)
+    // 對話框內點「確定刪除」
+    const confirmBtn = wrapper.findAll('[data-testid="dialog"] button').find((b) => b.text() === '確定刪除')
+    await confirmBtn!.trigger('click')
     await flushPromises()
     expect(deleteLotMock).toHaveBeenCalledWith('lot-1')
   })

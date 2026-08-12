@@ -32,6 +32,27 @@ export interface CreateLotPayload {
   buyQuantity: number
 }
 
+export interface HoldingPnlItem {
+  stockCode: string
+  costBasis: number
+  currentValue: number | null
+  unrealizedGain: number | null
+  unrealizedGainPct: number | null
+  priceUnavailableReason: 'priceUnavailable' | null
+}
+
+export interface PnlTotal {
+  totalCostBasis: number
+  totalCurrentValue: number
+  totalUnrealizedGain: number
+  totalUnrealizedGainPct: number
+}
+
+export interface PnlResult {
+  holdings: HoldingPnlItem[]
+  total: PnlTotal
+}
+
 /**
  * 持股管理 API。
  */
@@ -64,4 +85,11 @@ export const holdingsApi = {
    */
   getAllocation: () =>
     api.get<AllocationItem[]>('/holdings/allocation'),
+
+  /**
+   * 取得未實現損益（各檔持股與投資組合總計）。
+   * @returns 未實現損益資料
+   */
+  getPnl: () =>
+    api.get<PnlResult>('/holdings/pnl'),
 }

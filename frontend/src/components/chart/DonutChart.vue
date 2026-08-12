@@ -6,7 +6,7 @@
         :cy="center"
         :r="radius"
         fill="none"
-        stroke="rgba(255,255,255,0.08)"
+        stroke="rgba(255,255,255,0.14)"
         :stroke-width="stroke"
       />
       <circle
@@ -23,10 +23,10 @@
         :stroke-dashoffset="-seg.offset"
         :transform="`rotate(-90 ${center} ${center})`"
       />
-      <text :x="center" :y="center - 2" text-anchor="middle" fill="rgba(255,255,255,0.92)" font-size="18" font-family="'JetBrains Mono', monospace">
+      <text :x="center" :y="center - 2" text-anchor="middle" fill="#e8e8ea" font-size="18" font-family="'JetBrains Mono', monospace">
         {{ totalPct.toFixed(0) }}%
       </text>
-      <text :x="center" :y="center + 16" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="10" font-family="'JetBrains Mono', monospace">
+      <text :x="center" :y="center + 16" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="10" font-family="'JetBrains Mono', monospace">
         Allocation
       </text>
     </svg>
@@ -50,7 +50,11 @@ type DonutSegment = {
   value?: number
 }
 
-const palette = ['#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#84cc16']
+/**
+ * Signal Green 色階（非彩虹分類色），符合 DESIGN.md「The One Accent Rule」
+ * 取自 .impeccable/design.json 的 accent tonalRamp，挑選在深色背景上可辨識的區段
+ */
+const palette = ['#22c55e', '#5ade82', '#198a3c', '#9aeeb4', '#12692f', '#d6f9e2']
 
 const props = withDefaults(defineProps<{
   segments: DonutSegment[]

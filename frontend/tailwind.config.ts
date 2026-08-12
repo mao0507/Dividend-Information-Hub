@@ -17,7 +17,8 @@ export default {
         content: {
           DEFAULT: '#e8e8ea',
           soft: 'rgba(255,255,255,0.6)',
-          faint: 'rgba(255,255,255,0.38)',
+          // 0.38 曾在 surface-2/3 上量測僅 ~3.4-3.6:1，未達 WCAG AA 4.5:1；0.5 對 surface-2 約 4.6:1
+          faint: 'rgba(255,255,255,0.5)',
         },
         accent: {
           DEFAULT: 'var(--accent, #22c55e)',

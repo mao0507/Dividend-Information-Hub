@@ -7,6 +7,7 @@ const TWSE_TWT49U =
   'https://www.twse.com.tw/rwd/zh/exRight/TWT49U';
 const UA = 'Mozilla/5.0 (compatible; DividendHub/1.0) DividendHistoryBackfill';
 const BETWEEN_YEARS_DELAY_MS = 500;
+const FETCH_TIMEOUT_MS = 30_000;
 
 /** TWT49U 範圍查詢回應格式 */
 type Twt49uResponse = {
@@ -145,7 +146,10 @@ export class DividendHistoryBackfillService {
     const endDate = toYyyymmdd(new Date(Date.UTC(year, 11, 31)));
     const url = `${TWSE_TWT49U}?startDate=${startDate}&endDate=${endDate}&response=json`;
 
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
+    const res = await fetch(url, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`TWT49U HTTP ${res.status} for year ${year}`);
 
     const raw = (await res.json()) as Twt49uResponse;

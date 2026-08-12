@@ -92,7 +92,18 @@
       "WebFetch(domain:finmindtrade.com)",
       "WebFetch(domain:quantpass.org)",
       "WebFetch(domain:finmind.github.io)",
-      "WebFetch(domain:medium.com)"
+      "WebFetch(domain:medium.com)",
+      "Bash(git check-ignore *)",
+      "Bash(xargs wc -l)",
+      "Bash(grep -v \"^archive$\")",
+      "Bash(npm audit *)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(pnpm -v)",
+      "Bash(pnpm run *)",
+      "Bash(disown)",
+      "Bash(docker exec *)",
+      "Read(//c/Users/User/.claude/**)"
     ]
   }
 }

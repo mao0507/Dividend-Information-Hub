@@ -8,8 +8,16 @@
         class="bg-surface-2 border border-border rounded-[var(--radius)] px-5 py-4"
       >
         <div class="flex items-center gap-3">
-          <span class="text-content-faint text-[11px] font-mono uppercase tracking-widest">累積股息收入</span>
-          <Chip :pt="{ root: { style: {
+          <h2 class="text-content-soft text-[11px] font-mono font-semibold uppercase tracking-widest">累積股息收入</h2>
+          <span
+            v-if="accumulatedIncomeState === 'error' || accumulatedIncomeState === 'stale'"
+            role="status"
+            class="inline-flex items-center gap-1 font-mono text-[10px] text-warning"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-warning" aria-hidden="true" />
+            {{ accumulatedIncomeState === 'error' ? '同步失敗' : '資料可能過期' }}
+          </span>
+          <Chip v-if="accumulatedIncomeState === 'ready'" :pt="{ root: { style: {
             color: summary?.yoyPct != null && summary.yoyPct >= 0 ? 'var(--up-color)' : 'var(--down-color)',
             background: summary?.yoyPct != null && summary.yoyPct >= 0 ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
           } } }">
@@ -20,15 +28,25 @@
             前往持股管理 →
           </RouterLink>
         </div>
-        <div class="mt-3 flex items-end gap-8">
-          <div class="min-w-[220px]">
+        <p v-if="accumulatedIncomeState === 'error'" role="alert" class="mt-2 font-mono text-[11px] text-down">
+          同步失敗，請稍後重試
+        </p>
+        <div class="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div class="min-w-[160px]">
             <div class="text-content-faint text-[10px] font-mono uppercase tracking-widest">累積配息</div>
             <div class="text-2xl font-mono font-semibold text-accent">{{ accumulatedIncomeDisplay }}</div>
             <div class="text-[10px] text-content-faint font-mono">截至 {{ accumulatedIncomeAsOfDisplay }}</div>
           </div>
-          <div class="min-w-[220px]">
+          <div class="min-w-[160px]">
             <div class="text-content-faint text-[10px] font-mono uppercase tracking-widest">總投資金額</div>
             <div class="text-xl font-mono font-semibold text-content">{{ totalInvestedDisplay }}</div>
+          </div>
+          <div class="min-w-[160px]">
+            <div class="text-content-faint text-[10px] font-mono uppercase tracking-widest">填息進度</div>
+            <div class="text-xl font-mono font-semibold" :class="pendingFillDisplay.count > 0 ? 'text-warning' : 'text-content'">
+              {{ pendingFillDisplay.text }}
+            </div>
+            <div v-if="pendingFillDisplay.count > 0" class="text-[10px] text-content-faint font-mono">最長 {{ pendingFillDisplay.maxDays }} 日未填息</div>
           </div>
         </div>
       </div>
@@ -39,14 +57,16 @@
         <!-- TAIEX index chart -->
         <div class="bg-surface-2 border border-border rounded-[var(--radius)] overflow-hidden">
           <div class="flex items-center gap-3 px-5 py-4 border-b border-border">
-            <span class="font-mono text-sm font-semibold text-content">台灣加權指數</span>
+            <h2 class="font-mono text-sm font-semibold text-content">台灣加權指數</h2>
             <span class="text-content-faint font-mono text-xs">TAIEX</span>
             <div class="flex-1" />
-            <div class="flex gap-1">
+            <div class="flex gap-1" role="group" aria-label="時間範圍">
               <button
                 v-for="r in RANGES"
                 :key="r"
-                :class="['px-2 py-0.5 font-mono text-[10px] rounded transition-colors', activeRange === r ? 'bg-accent/20 text-accent' : 'text-content-soft hover:text-content']"
+                type="button"
+                :aria-pressed="activeRange === r"
+                :class="['min-w-[36px] px-2 py-1.5 font-mono text-[10px] rounded transition-colors focus:outline-none focus:ring-2 focus:ring-accent', activeRange === r ? 'bg-accent/20 text-accent' : 'text-content-soft hover:text-content']"
                 @click="activeRange = r"
               >{{ r }}</button>
             </div>
@@ -76,15 +96,15 @@
         <!-- Right sidebar: upcoming ex-div -->
         <div class="bg-surface-2 border border-border rounded-[var(--radius)] overflow-hidden">
           <div class="px-4 py-4 border-b border-border">
-            <span class="font-mono text-xs font-semibold text-content-soft uppercase tracking-widest">7 日除息行事曆</span>
+            <h2 class="font-mono text-xs font-semibold text-content-soft uppercase tracking-widest">7 日除息行事曆</h2>
           </div>
           <div class="divide-y divide-border">
             <template v-if="upcoming.length">
-              <div
+              <RouterLink
                 v-for="ev in upcoming"
                 :key="`${ev.date}-${ev.stockCode}`"
-                class="px-4 py-2.5 flex items-center gap-3 hover:bg-surface-3 transition-colors cursor-pointer"
-                @click="router.push(`/stock/${ev.stockCode}`)"
+                :to="`/stock/${ev.stockCode}`"
+                class="px-4 py-2.5 flex items-center gap-3 hover:bg-surface-3 transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset"
               >
                 <div class="text-center min-w-[36px]">
                   <div class="font-mono text-[10px] text-content-faint">{{ fmtMonth(ev.date ?? ev.exDate ?? '') }}</div>
@@ -100,10 +120,10 @@
                   </div>
                   <div v-if="ev.amount > 0" class="font-mono text-[9px] text-content-faint">元/股</div>
                 </div>
-              </div>
+              </RouterLink>
             </template>
             <div v-else class="px-4 py-8 text-center text-content-faint text-[12px] font-mono">
-              近 7 日無除息事件
+              {{ summaryLoadFailed ? '同步失敗，暫時無法顯示除息事件' : '近 7 日無除息事件' }}
             </div>
           </div>
         </div>
@@ -112,13 +132,13 @@
       <!-- Watchlist summary -->
       <div class="bg-surface-2 border border-border rounded-[var(--radius)] overflow-hidden">
         <div class="px-5 py-4 border-b border-border flex items-center gap-3">
-          <span class="font-mono text-xs font-semibold text-content-soft uppercase tracking-widest">自選股</span>
+          <h2 class="font-mono text-xs font-semibold text-content-soft uppercase tracking-widest">自選股</h2>
           <div class="flex-1" />
           <RouterLink to="/watchlist" class="font-mono text-[10px] text-content-faint hover:text-content transition-colors">
             管理 →
           </RouterLink>
         </div>
-        <div v-if="watchlistLoading" class="px-5 py-6 text-center text-content-faint text-xs font-mono">載入中…</div>
+        <div v-if="watchlistLoading" role="status" class="px-5 py-6 text-center text-content-faint text-xs font-mono">載入中…</div>
         <template v-else>
           <div
             v-for="group in watchlistGroups"
@@ -130,11 +150,11 @@
               <span class="font-mono text-[10px] text-content-faint ml-auto">{{ group.items.length }} 檔</span>
             </div>
             <div class="divide-y divide-border">
-              <div
+              <RouterLink
                 v-for="item in group.items"
                 :key="item.id"
-                class="px-5 py-2.5 flex items-center gap-4 hover:bg-surface-3 transition-colors cursor-pointer"
-                @click="router.push(`/stock/${item.stockCode}`)"
+                :to="`/stock/${item.stockCode}`"
+                class="px-5 py-2.5 flex items-center gap-4 hover:bg-surface-3 transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset"
               >
                 <div class="w-[52px] font-mono text-[11px] text-content-soft">{{ item.stockCode }}</div>
                 <div class="flex-1 text-[13px] text-content truncate">{{ item.stock?.name ?? '—' }}</div>
@@ -158,7 +178,7 @@
                     {{ dashYield(item) }}
                   </div>
                 </div>
-              </div>
+              </RouterLink>
             </div>
           </div>
           <div v-if="!watchlistGroups.length" class="px-5 py-8 text-center text-content-faint text-xs font-mono">
@@ -173,7 +193,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TvChart from '@/components/chart/TvChart.vue'
 import SparkLine from '@/components/chart/SparkLine.vue'
@@ -190,7 +210,6 @@ import type {
 } from '@/types'
 type DashboardCardState = 'ready' | 'empty' | 'stale' | 'error'
 
-const router = useRouter()
 const RANGES = ['1W', '1M', '3M', '6M', '1Y', 'MAX']
 const activeRange = ref<string>('6M')
 
@@ -232,6 +251,18 @@ const accumulatedIncomeAsOfDisplay = computed<string>(() =>
 const totalInvestedDisplay = computed<string>(() =>
   `NT$ ${(summary.value?.totalInvestedAmount ?? 0).toLocaleString()}`,
 )
+
+/**
+ * 填息進度顯示：待填息檔數與最長天數（產品核心差異化指標，見 PRODUCT.md Principle #2）。
+ * @returns 顯示文字與原始數值
+ */
+const pendingFillDisplay = computed<{ text: string; count: number; maxDays: number }>(() => {
+  const pending = summary.value?.pendingFill
+  if (!pending || pending.count === 0) {
+    return { text: '全數已填息', count: 0, maxDays: 0 }
+  }
+  return { text: `${pending.count} 檔待填息`, count: pending.count, maxDays: pending.maxDays }
+})
 
 const taiexLatest = computed<{ close: number; change: number; changePct: number } | null>(() => {
   const candles = taiexCandles.value

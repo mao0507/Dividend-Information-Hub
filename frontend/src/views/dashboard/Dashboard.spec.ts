@@ -221,7 +221,7 @@ describe('DashboardPage range resilience', () => {
     await flushAll()
     const combinedCard = wrapper.find('[data-test="combined-summary-card"]')
     expect(combinedCard.exists()).toBe(true)
-    expect(combinedCard.text()).toContain('資料同步中')
+    expect(combinedCard.text()).toContain('同步失敗，請稍後重試')
     expect(combinedCard.text()).toContain('前往持股管理')
   })
 })

@@ -270,7 +270,8 @@ const initChart = (): void => {
   applyTheme()
 
   if (props.lineMode) {
-    candleSeries = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
+    // 線圖模式（如大盤指數）用中性內容色，不佔用 Signal Green（保留給 CTA/選中狀態），也不暗示漲跌方向
+    candleSeries = chart.addLineSeries({ color: '#e8e8ea', lineWidth: 2 })
   } else {
     candleSeries = chart.addCandlestickSeries({
       upColor: upColor.value,

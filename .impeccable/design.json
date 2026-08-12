@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-13T00:00:00Z",
+  "title": "Design System: 股息站 Dividend Hub",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Signal Green", "canonical": "#22c55e", "tonalRamp": ["#052e16", "#0a4a24", "#12692f", "#198a3c", "#22c55e", "#5ade82", "#9aeeb4", "#d6f9e2"] },
+      "danger": { "role": "secondary", "displayName": "Alert Red", "canonical": "#ef4444", "tonalRamp": ["#450a0a", "#701515", "#9f1f1f", "#c72e2e", "#ef4444", "#f57e7e", "#fab3b3", "#fdd9d9"] },
+      "warning": { "role": "tertiary", "displayName": "Amber Warning", "canonical": "#f59e0b", "tonalRamp": ["#451a03", "#7a3505", "#a35207", "#cc7409", "#f59e0b", "#f8b84d", "#fbd08c", "#fde8c4"] },
+      "surface": { "role": "neutral", "displayName": "Void Black", "canonical": "#0a0a0b", "tonalRamp": ["#000000", "#0a0a0b", "#101013", "#16161a", "#1f1f24", "#2b2b31", "#3a3a42", "#4c4c56"] },
+      "content": { "role": "neutral", "displayName": "Primary Text", "canonical": "#e8e8ea", "tonalRamp": ["#4c4c56", "#6a6a75", "#8c8c96", "#adadb6", "#c5c5cc", "#e8e8ea", "#f2f2f3", "#ffffff"] }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Body (Inter)", "purpose": "一般敘述文字、標籤、說明。" },
+      "data": { "displayName": "Data (JetBrains Mono)", "purpose": "價格、股數、百分比、代碼、時間戳等數字性質資料。" }
+    },
+    "shadows": [
+      { "name": "overlay-shadow", "value": "0 25px 50px -12px rgba(0,0,0,0.7)", "purpose": "Dialog 容器，標示懸浮於頁面之上。" },
+      { "name": "control-shadow", "value": "0 1px 2px rgba(0,0,0,0.3)", "purpose": "Select overlay、Slider handle 等小型互動元件的輕量懸浮感。" }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Toggle、按鈕 hover 等狀態轉換的預設過渡曲線，約 150-200ms。" }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主要操作按鈕，Signal Green 底。",
+      "html": "<button class=\"ds-btn-primary\">同步資料</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #22c55e; color: #0a0a0b; font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: var(--radius, 10px); border: none; cursor: pointer; transition: opacity 0.15s; } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #22c55e; } .ds-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "次要操作按鈕，Panel Black 底 + 外框。",
+      "html": "<button class=\"ds-btn-secondary\">取消</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #101013; color: rgba(255,255,255,0.6); font-weight: 500; font-size: 14px; padding: 8px 16px; border-radius: var(--radius, 10px); border: 1px solid rgba(255,255,255,0.14); cursor: pointer; transition: color 0.15s; } .ds-btn-secondary:hover { color: #e8e8ea; }"
+    },
+    {
+      "name": "Data Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "狀態徽章，如「高息」「長配」。",
+      "html": "<span class=\"ds-badge\">高息</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; line-height: 1; padding: 1px 5px; border-radius: 3px; background: rgba(34,197,94,0.15); color: #22c55e; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "分類/篩選標籤。",
+      "html": "<span class=\"ds-chip\">月配息</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 4px; background: #101013; color: #e8e8ea; }"
+    },
+    {
+      "name": "Data Card",
+      "kind": "card",
+      "refersTo": "surface-2",
+      "description": "標準內容卡片，靠明度分層而非陰影。",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">殖利率</div><div class=\"ds-card-value\">5.42%</div></div>",
+      "css": ".ds-card { background: #101013; border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius, 10px); padding: 16px; } .ds-card-label { font-family: Inter, 'Noto Sans TC', sans-serif; font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 4px; } .ds-card-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; color: #e8e8ea; }"
+    },
+    {
+      "name": "Select Field",
+      "kind": "input",
+      "refersTo": "select",
+      "description": "下拉選單，選項為代碼/數字性質資料。",
+      "html": "<div class=\"ds-select\"><span class=\"ds-select-label\">2330 台積電</span></div>",
+      "css": ".ds-select { display: flex; align-items: center; width: 100%; background: #0a0a0b; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; cursor: pointer; transition: border-color 0.15s; } .ds-select:hover { border-color: rgba(255,255,255,0.14); } .ds-select:focus-within { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.4); } .ds-select-label { flex: 1; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e8e8ea; }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "custom",
+      "refersTo": "toggleswitch",
+      "description": "開關切換元件。",
+      "html": "<button class=\"ds-toggle\" data-checked=\"true\"><span class=\"ds-toggle-handle\"></span></button>",
+      "css": ".ds-toggle { position: relative; display: inline-flex; width: 36px; height: 20px; border-radius: 9999px; background: #16161a; border: none; cursor: pointer; transition: background 0.2s; } .ds-toggle[data-checked=\"true\"] { background: #22c55e; } .ds-toggle-handle { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 9999px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: transform 0.2s; } .ds-toggle[data-checked=\"true\"] .ds-toggle-handle { transform: translateX(18px); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Trading Terminal",
+    "overview": "介面借用專業交易終端的視覺語言——近黑背景、等寬數字字體、扁平無陰影、細邊框分區——但服務對象不是機構交易員，而是自己記帳追蹤存股的個人投資人。因此語氣要溫和好懂：資訊密度高但不冷峻，數字用等寬字體給出終端感的精確可信度，介面結構與互動保持友善、低學習成本。這不是要模仿 Bloomberg 終端的壓迫感，而是借它「數字說話、資料誠實」的精神，套進一個平易近人的個人工具外殼。",
+    "keyCharacteristics": [
+      "近黑背景（#0a0a0b）+ 三層 surface 分級，靠明度差而非陰影分區",
+      "JetBrains Mono 專門用於數字/代碼類資料，Inter + Noto Sans TC 用於一般文字",
+      "單一 Signal Green accent，扁平無陰影為主，僅 Dialog／浮層用陰影標示層級",
+      "圓角隨元件層級遞增：badge/chip 最緊（3–4px）→ button/select（8–10px）→ dialog（20px）"
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "全系統只有 Signal Green 一個強調色；紅色只用在「漲」與危險操作語境，不與 Signal Green 並列作為兩個平行的品牌色使用。", "section": "colors" },
+      { "name": "The Mono-For-Numbers Rule", "body": "任何股價、股數、百分比、股票代號、日期時間戳，一律用 JetBrains Mono；純敘述性文字用 Inter。混用是這個系統辨識度的核心。", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "頁面內常駐元件（卡片、按鈕、輸入框）不用陰影；陰影只在元件短暫浮出頁面平面時出現（Dialog、下拉選單）。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 用 JetBrains Mono 呈現任何價格、股數、百分比、代碼、時間戳",
+      "Do 用三層 surface 明度表達層級，而非新增陰影",
+      "Do 保持紅漲綠跌（Alert Red = 漲 / Signal Green = 跌）與台股慣例一致",
+      "Do 圓角隨元件暫態程度遞增：常駐小元件方正、浮層元件圓潤"
+    ],
+    "donts": [
+      "Don't 幫常駐卡片、按鈕、輸入框加陰影",
+      "Don't 引入第二個強調色跟 Signal Green 並列成雙品牌色",
+      "Don't 把一般敘述文字放進 JetBrains Mono，或把數字類資料放進 Inter"
+    ]
+  }
+}

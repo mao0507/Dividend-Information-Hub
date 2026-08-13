@@ -1,6 +1,6 @@
 <template>
   <AppLayout :breadcrumbs="['股票', code]">
-    <div v-if="loading" class="flex items-center justify-center h-full">
+    <div v-if="loading" role="status" aria-live="polite" class="flex items-center justify-center h-full">
       <div class="font-mono text-content-faint text-sm">載入中…</div>
     </div>
 

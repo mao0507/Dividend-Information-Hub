@@ -198,6 +198,37 @@ describe('TvChart', () => {
     expect(wrapper.text()).toContain('尚無 K 線資料')
   })
 
+  it('role=img sits on the chart element, not a container wrapping the status overlays', async () => {
+    const TvChart = await importComponent()
+    const wrapper = mount(TvChart, { props: { candles: [], loading: true } })
+    await flushPromises()
+    const imgEl = wrapper.find('[role="img"]')
+    expect(imgEl.exists()).toBe(true)
+    // 狀態文字不應是 role=img 的子節點，否則會被 AT 從無障礙樹裡整段吃掉
+    expect(imgEl.find('[role="status"]').exists()).toBe(false)
+  })
+
+  it('live region text reflects up direction using normalized (sorted) candle order', async () => {
+    const TvChart = await importComponent()
+    // 刻意提供「新到舊」順序，驗證摘要文字依正規化後（舊到新）排序計算，而非原始 props 順序
+    const descCandles = [...makeCandles(3)].reverse()
+    const wrapper = mount(TvChart, { props: { candles: descCandles } })
+    await flushPromises()
+    const status = wrapper.find('[role="status"]')
+    expect(status.text()).toContain('上漲')
+    expect(status.text()).toContain('最新收盤')
+  })
+
+  it('live region omits the trend delta when only one valid candle exists', async () => {
+    const TvChart = await importComponent()
+    const wrapper = mount(TvChart, { props: { candles: makeCandles(1) } })
+    await flushPromises()
+    const status = wrapper.find('[role="status"]')
+    expect(status.text()).toContain('最新收盤')
+    expect(status.text()).not.toContain('上漲')
+    expect(status.text()).not.toContain('下跌')
+  })
+
   it('renders only dates with valid candle data', async () => {
     const TvChart = await importComponent()
     const mixed = [

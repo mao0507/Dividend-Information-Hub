@@ -97,7 +97,7 @@
         :cx="xScale(hoverIdx)"
         :cy="yScale(series[hoverIdx])"
         r="5"
-        fill="#0a0a0a"
+        fill="#0a0a0b"
         :stroke="accent"
         stroke-width="2"
       />

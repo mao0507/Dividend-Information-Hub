@@ -1,23 +1,27 @@
 <template>
-  <div ref="containerRef" class="relative w-full" :style="{ height: `${height}px` }">
+  <div ref="containerRef" class="relative w-full" :style="{ height: `${height}px` }" :aria-busy="chartPhase === 'loading'">
     <div
       v-if="chartPhase === 'loading'"
+      aria-hidden="true"
       class="absolute inset-0 z-10 bg-surface-2 animate-pulse rounded"
-      aria-busy="true"
     />
     <div
       v-else-if="chartPhase === 'empty'"
+      aria-hidden="true"
       class="absolute inset-0 z-10 flex items-center justify-center rounded bg-surface-2"
     >
       <span class="px-4 text-center font-mono text-xs text-content-faint">尚無 K 線資料</span>
     </div>
     <div
       v-else-if="chartPhase === 'error'"
+      aria-hidden="true"
       class="absolute inset-0 z-10 flex items-center justify-center rounded bg-surface-2"
     >
       <span class="px-4 text-center font-mono text-xs text-content-faint">{{ errorHint }}</span>
     </div>
-    <div ref="chartRef" class="relative z-0 min-h-[1px] h-full w-full" />
+    <div ref="chartRef" role="img" :aria-label="chartAriaLabel" class="relative z-0 min-h-[1px] h-full w-full" />
+    <!-- 持久 live region：內容隨 phase 變動時才會被螢幕閱讀器播報（v-if 建立當下不會播報） -->
+    <span class="sr-only" role="status" aria-live="polite">{{ chartStatusText }}</span>
   </div>
 </template>
 
@@ -85,6 +89,28 @@ const errorHint = computed<string>(() =>
 const seriesCandles = computed<OhlcvPoint[]>(() =>
   normalized.value.kind === 'ready' ? normalized.value.candles : [],
 )
+
+/**
+ * 圖表摘要文字（用於 aria-label 與 live region）。
+ * 讀取正規化後的 seriesCandles（已排序/去重/過濾），避免原始 props.candles
+ * 順序不保證由舊到新時，方向或最新價算錯。
+ */
+const chartAriaLabel = computed<string>(() => {
+  if (chartPhase.value === 'loading') return '價格走勢圖表載入中'
+  if (chartPhase.value === 'empty') return '價格走勢圖表，尚無資料'
+  if (chartPhase.value === 'error') return `價格走勢圖表，${errorHint.value}`
+  const candles = seriesCandles.value
+  if (candles.length === 0) return '價格走勢圖表'
+  const last = candles[candles.length - 1]
+  if (candles.length < 2) return `價格走勢圖表，最新收盤 ${last.close.toFixed(2)}`
+  const prev = candles[candles.length - 2]
+  const changePct = ((last.close - prev.close) / prev.close) * 100
+  const direction = changePct > 0 ? '上漲' : changePct < 0 ? '下跌' : '持平'
+  return `價格走勢圖表，最新收盤 ${last.close.toFixed(2)}，較前一筆${direction} ${Math.abs(changePct).toFixed(2)}%`
+})
+
+/** live region 播報文字，與 chartAriaLabel 內容相同但獨立命名以利語意區分 */
+const chartStatusText = computed<string>(() => chartAriaLabel.value)
 
 const candleDateSet = computed<Set<string>>(
   () => new Set(seriesCandles.value.map((c) => c.date)),
